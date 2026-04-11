@@ -1,0 +1,56 @@
+Experiments using NuttX RTOS
+============================
+
+The Arduino Maker Workshop VScode extension has been great. I successfully developed the "Watch
+Cleaner Controller" project, including a GUI using LVGL and am able to drive a motor driver
+via PWM controlled pins. The Arduino IDE and Arduino Maker Workshop are essentially the same thing,
+except that there's no real debugger on either. The motor controller uses an Espressif esp32c3-xiao
+device, which is based on 32-bit RISC-V. 
+
+I wanted to experiment more with programming the esp32c3, specifically understanding and implementing 
+tasks via an RTOS. I came across a github repo call cmc-labo/tinyos-rtos, which looked like the 
+beginnings of a very simple RTOS that had esp32c3 support. It seems it would be fun to look into
+this and try to get it running on my board. In order to help the process along, I found that
+the open source RTOS NuttX supported the esp32c3 also. I thought this would be useful in 
+understanding how to get an executable built on a different platform from ESP-IDF to load and run
+on the device. In fact, NuttX is very helpful in this regard. It uses only the gcc for RISC-V from
+the web to build the nuttx executable.   
+
+As it turns out, however, the tinyos-rtos repo is not very complete. 
+It does not have the board support needed to create or run esp32c3 executables. Based on comments I 
+see in Hackernews, it may be an AI generated project that the author is simply uploading or
+is being uploaded by bot agents. I quickly abandoned tinyos-rtos, although I'll monitor the repo
+for a while to see if esp32c3 support ever does arrive. 
+
+
+Apr 10 2026:
+
+Building nuttx is quite simple. The OS is very well documented. The documentation for the 
+basics of the OS is here: https://nuttx.apache.org/docs/latest/index.html. The esp32c3 specifics are
+here: https://nuttx.apache.org/docs/latest/platforms/risc-v/esp32c3/index.html
+
+Get the prerequistes: https://nuttx.apache.org/docs/latest/quickstart/install.html
+Install the RISC-V toolchain, instructions are in the esp32c3 link above. 
+
+I used the Seeed Studio XIAO ESP32C3 board.
+The esp32c3-xiao board specifics are here: https://nuttx.apache.org/docs/latest/platforms/risc-v/esp32c3/boards/esp32c3-xiao/index.html
+
+To build for the Xiao board:
+>git clone https://github.com/apache/nuttx.git nuttx
+>git clone https://github.com/apache/nuttx-apps.git apps
+>cd nuttx
+>make distclean
+>./tools/configure.sh esp32c3-xiao:usbnsh
+>make V=1
+
+Building Custom Applications
+============================
+
+I've successfully created a custom app, built it, and executed it on the esp32c3-xiao device.
+This video has all the details: https://www.youtube.com/watch?v=O5JmnpkHRlQ
+
+
+
+
+
+
