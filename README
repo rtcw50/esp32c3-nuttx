@@ -48,7 +48,134 @@ Building Custom Applications
 
 I've successfully created a custom app, built it, and executed it on the esp32c3-xiao device.
 This video has all the details: https://www.youtube.com/watch?v=O5JmnpkHRlQ
+The was a simple copy of hello and put in the apps directory. I created an out of tree
+application called "blink" which is detailed below.
 
+Here are some details about a simple "blink" program that is created outside of the 
+apps directory source tree. This makes it easier to maintain your nuttx projects outside
+of the nuttx and apps directories.
+
+The directory is esp32c3-xiao-apps and is parallel to nuttx and apps. There's a subdirectory
+called "blink" in the esp32c3-xiao-apps directory where the custom app lives.
+The "blink" program blinks a blue and red LED connected to pins D1 and D2, respectively.
+It uses the nuttx way, via ioctl calls to /dev/gpio0 and /dev/gpio1.
+
+There is some setup required for building an app outside of the nuttx apps directory.
+The nuttx documentation I followed is here: (item 3) https://nuttx.apache.org/docs/latest/guides/customapps.html
+Follow the steps exactly as there are Kconfig, Make.defs, and Makefile in the top level
+custom apps directory and the "blink" (or other custom apps) directory. The video above
+is helpful, but use this documentation as the source of truth.
+
+The "blink" app uses the gpio configuration to enable CONFIG_DEV_GPIO settings that
+allows certains interfaces and macros to be used in the blink_main.c code. So
+the configuration must include gpio, e.g. ./tools/configure.sh esp32c3-xiao:gpio.
+This will also build the apps/examples/gpio program.
+
+In order to understand what pin /dev/gpio0 and /dev/gpio1 map to, there has to
+be modifications to the esp32c3-xiao board files. These are located at 
+nuttx/boards/risc-v/esp32c3/esp32c3-xiao. The files modified are include/board.h
+and src/esp32c3_gpio.c. Here are the changes: 
+
+
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
+index 4ffe981e72..b19d59fe94 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
+@@ -27,10 +27,11 @@
+  * Pre-processor Definitions
+  ****************************************************************************/
+ 
++/* Testing */
+ /* GPIO pins used by the GPIO Subsystem */
+ 
+-#define BOARD_NGPIOOUT    1 /* Amount of GPIO Output pins */
+-#define BOARD_NGPIOINT    1 /* Amount of GPIO Input w/ Interruption pins */
++#define BOARD_NGPIOOUT    10 /* Amount of GPIO Output pins */
++#define BOARD_NGPIOINT    1   /* Amount of GPIO Input w/ Interruption pins */
+ 
+ #endif /* __BOARDS_RISCV_ESP32C3_ESP32C3_XIAO_INCLUDE_BOARD_H */
+ 
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
+index 78fe996097..dccd1e7b77 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
+@@ -64,6 +64,30 @@
+ 
+ #define GPIO_OUT1  3
+ 
++/* GPIO2 is reserved as an IRQ PIN, do not use it for IO */
++#define GPIO3 3
++#define GPIO4 4
++#define GPIO5 5
++#define GPIO6 6
++#define GPIO7 7
++#define GPIO21 21
++#define GPIO20 20
++#define GPIO8 8
++#define GPIO9 9
++#define GPIO10 10
++/* We refer to pins by their Dx names in Arduino, so do it here */
++#define D1 GPIO3
++#define D2 GPIO4
++#define D3 GPIO5
++#define D4 GPIO6
++#define D5 GPIO7
++#define D6 GPIO21
++#define D7 GPIO20
++#define D8 GPIO8
++#define D9 GPIO9
++#define D10 GPIO10
++
++
+ #if !defined(CONFIG_ESPRESSIF_GPIO_IRQ) && BOARD_NGPIOINT > 0
+ #  error "NGPIOINT is > 0 and GPIO interrupts aren't enabled"
+ #endif
+@@ -73,6 +97,7 @@
+  */
+ 
+ #define GPIO_IRQPIN  2
++#define D0 GPIO_IRQPIN
+ 
+ /****************************************************************************
+  * Private Types
+@@ -128,7 +153,17 @@ static const struct gpio_operations_s gpout_ops =
+ 
+ static const uint32_t g_gpiooutputs[BOARD_NGPIOOUT] =
+ {
+-  GPIO_OUT1
++/*  GPIO_OUT1 */
++D1, /* /dev/gpio0 */
++D2,
++D3,
++D4,
++D5,
++D6,
++D7,
++D8,
++D9,
++D10   /* /dev/gpio9 */ 
+ };
+ 
+ static struct espgpio_dev_s g_gpout[BOARD_NGPIOOUT];
+
+ I don't know of a way to pull these changes out of tree. Perhaps
+ creating a new custom board and populating it would work. For now,
+ accept that you need to customize the files in nuttx work tree.
+
+ What were doing here is adding 10 of the 11 esp32c3 xiao GPIO pins
+ to the /dev/gpio tree. D0 is already set to be an interrupt pin, so
+ I left that one out as an output. Once the nsh is running, 'ls /dev'
+ should show gpio0..9 and gpio10. gpio10 will be the interrupt input
+ pin. It would have been nice to have the /dev names correspond to the 
+ esp32c3 xiao pinout, and you can do that with an additional mapping
+ of pin numbers for xiao in the gpio_pin_register() call. But for now,
+ it just uses the ordinal count of the pins to set the /dev/gpio number.
+
+ When you select the "blink" application in make menuconfig, it will build
+ along with the other selected apps.  Flashing to the board is done with:
+ esptool -c esp32c3 -p /dev/ttyACM0 -b 115200 write-flash -fs 4MB -fm dio -ff 80m 0x0000 nuttx.bin
+
+Run blink in the nsh and the red and blue LEDs with alternate flashing.
 
 
 

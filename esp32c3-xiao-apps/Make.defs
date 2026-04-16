@@ -1,0 +1,1 @@
+include $(wildcard $(APPDIR)/esp32c3-xiao-apps/*/Make.defs)
