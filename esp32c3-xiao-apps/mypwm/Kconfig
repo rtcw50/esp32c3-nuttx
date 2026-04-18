@@ -1,0 +1,29 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config  ESP32C3_XIAO_MYPWM 
+	tristate "\"mypwm\" example"
+	default n
+	---help---
+		Enable the \"mypwm\" example
+
+if ESP32C3_XIAO_MYPWM
+
+config ESP32C3_XIAO_MYPWM_PROGNAME
+	string "Program name"
+	default "mypwm"
+	---help---
+		This is the name of the program that will be used when the NSH ELF
+		program is installed.
+
+config ESP32C3_XIAO_MYPWM_PRIORITY
+	int "mypwm task priority"
+	default 100
+
+config ESP32C3_XIAO_MYPWM_STACKSIZE
+	int "mypwm stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif
