@@ -30,6 +30,8 @@
 #include <nuttx/timers/pwm.h>
 #include <unistd.h>
 
+#define PWM_MAX_DUTY 95 
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -105,8 +107,9 @@ int main(int argc, FAR char *argv[])
 
   /* Simple Ramp State Machine: Channel 0 (D1/GPIO3) */
   printf("Ramping GPIO3 PWM Pin (D1) ...\n");
-  for (duty = 0; duty <= 100; duty += 1) {
-    pwm0info.channels[0].duty = (b16divi(uitoub16(duty) - 1, 100)); 
+  for (duty = 0; duty <= PWM_MAX_DUTY; duty += 1) {
+//    pwm0info.channels[0].duty = (b16divi(uitoub16(duty) - 1, 100)); 
+    pwm0info.channels[0].duty = (uint32_t)(((uint64_t)duty << 16) / 100);
     ioctl(fd0, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm0info));
 
     usleep(20000);
@@ -119,17 +122,18 @@ int main(int argc, FAR char *argv[])
   /* Ramp down */
   printf("Ramping down GPIO3 PWM Pin (D1) ...\n");
   for (duty = duty_ch0; duty >= 0; duty -= 1) {
-    pwm0info.channels[0].duty = (b16divi(uitoub16(duty) - 1, 100)); 
+//    pwm0info.channels[0].duty = (b16divi(uitoub16(duty) - 1, 100)); 
+    pwm0info.channels[0].duty = (uint32_t)(((uint64_t)duty << 16) / 100);
     ioctl(fd0, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm0info));
     usleep(20000);
   } 
 
-  ioctl(fd0, PWMIOC_STOP, 0);
 
    /* Simple Ramp State Machine: Channel 1 (D2/GPIO4) */
   printf("Ramping GPIO4 PWM Pin (D2) ...\n");
-  for (duty = 0; duty <= 100; duty += 1) {
-    pwm1info.channels[0].duty = (b16divi(uitoub16(duty) - 1, 100)); 
+  for (duty = 0; duty <= PWM_MAX_DUTY; duty += 1) {
+ //   pwm1info.channels[0].duty = (b16divi(uitoub16(duty) - 1, 100)); 
+    pwm1info.channels[0].duty = (uint32_t)(((uint64_t)duty << 16) / 100);
     ioctl(fd1, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm1info));
     usleep(20000);
   }
@@ -140,10 +144,13 @@ int main(int argc, FAR char *argv[])
   /* Ramp down */
   printf("Ramping down GPIO4 PWM Pin (D2) ...\n");
   for (duty = duty_ch1; duty >= 0; duty -= 1) {
-    pwm1info.channels[0].duty = (b16divi(uitoub16(duty) - 1, 100)); 
+//    pwm1info.channels[0].duty = (b16divi(uitoub16(duty) - 1, 100)); 
+    pwm1info.channels[0].duty = (uint32_t)(((uint64_t)duty << 16) / 100);
     ioctl(fd1, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm1info));
     usleep(20000);
   }  
+
+  ioctl(fd0, PWMIOC_STOP, 0);
   ioctl(fd1, PWMIOC_STOP, 0);
 
 
