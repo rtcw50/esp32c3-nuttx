@@ -1,0 +1,125 @@
+diff --git a/Application.mk b/Application.mk
+index e99300644..15f15d64e 100644
+--- a/Application.mk
++++ b/Application.mk
+@@ -93,6 +93,7 @@ RUSTOBJS = $(RUSTSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ ZIGOBJS = $(ZIGSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ DOBJS = $(DSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ SWIFTOBJS = $(SWIFTSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
++ZENCOBJS = $(ZENCSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ 
+ MAINCXXSRCS = $(filter %$(CXXEXT),$(MAINSRC))
+ MAINCSRCS = $(filter %.c,$(MAINSRC))
+@@ -100,22 +101,24 @@ MAINRUSTSRCS = $(filter %$(RUSTEXT),$(MAINSRC))
+ MAINZIGSRCS = $(filter %$(ZIGEXT),$(MAINSRC))
+ MAINDSRCS = $(filter %$(DEXT),$(MAINSRC))
+ MAINSWIFTSRCS = $(filter %$(SWIFTEXT),$(MAINSRC))
++MAINZENCSRCS = $(filter %$(ZENCEXT),$(MAINSRC))
+ MAINCXXOBJ = $(MAINCXXSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ MAINCOBJ = $(MAINCSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ MAINRUSTOBJ = $(MAINRUSTSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ MAINZIGOBJ = $(MAINZIGSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ MAINDOBJ = $(MAINDSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ MAINSWIFTOBJ = $(MAINSWIFTSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
++MAINZENCOBJ = $(MAINZENCSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
+ 
+ SRCS = $(ASRCS) $(CSRCS) $(CXXSRCS) $(MAINSRC)
+-OBJS = $(RAOBJS) $(CAOBJS) $(COBJS) $(CXXOBJS) $(RUSTOBJS) $(ZIGOBJS) $(DOBJS) $(SWIFTOBJS) $(EXTOBJS)
++OBJS = $(RAOBJS) $(CAOBJS) $(COBJS) $(CXXOBJS) $(RUSTOBJS) $(ZIGOBJS) $(DOBJS) $(SWIFTOBJS) $(EXTOBJS) $(ZENCOBJS)
+ 
+ ifneq ($(BUILD_MODULE),y)
+-  OBJS += $(MAINCOBJ) $(MAINCXXOBJ) $(MAINRUSTOBJ) $(MAINZIGOBJ) $(MAINDOBJ) $(MAINSWIFTOBJ)
++  OBJS += $(MAINCOBJ) $(MAINCXXOBJ) $(MAINRUSTOBJ) $(MAINZIGOBJ) $(MAINDOBJ) $(MAINSWIFTOBJ) $(MAINZENCOBJ)
+ endif
+ 
+ ifneq ($(strip $(PROGNAME)),)
+-  PROGOBJ := $(MAINCOBJ) $(MAINCXXOBJ) $(MAINRUSTOBJ) $(MAINZIGOBJ) $(MAINDOBJ) $(MAINSWIFTOBJ)
++  PROGOBJ := $(MAINCOBJ) $(MAINCXXOBJ) $(MAINRUSTOBJ) $(MAINZIGOBJ) $(MAINDOBJ) $(MAINSWIFTOBJ) $(MAINZENCOBJ)
+   PROGLIST := $(addprefix $(BINDIR)$(DELIM),$(PROGNAME))
+   REGLIST := $(addprefix $(BUILTIN_REGISTRY)$(DELIM),$(addsuffix .bdat,$(PROGNAME)))
+ 
+@@ -158,6 +161,7 @@ ZIGELFFLAGS ?= $(ZIGFLAGS)
+ RUSTELFFLAGS ?= $(RUSTFLAGS)
+ DELFFLAGS ?= $(DFLAGS)
+ SWIFTELFFLAGS ?= $(SWIFTFLAGS)
++ZENCELFFLAGS ?= $(ZENCFLAGS)
+ 
+ DEPPATH += --dep-path .
+ DEPPATH += --obj-path .
+@@ -214,6 +218,14 @@ define ELFCOMPILESWIFT
+ 	$(ECHO_END)
+ endef
+ 
++define ELFCOMPILEZENC
++	$(ECHO_BEGIN)"ZENC:  $1 " 
++	$(Q) $(ZENC)  $(ZENCELFFLAGS) $($(strip $1)_ZENCELFFLAGS) $1 -o $(basename $1).zcc
++	$(ECHO_BEGIN)"CC: $(basename $1).zcc "
++	$(Q) $(MODULECC) -x c -c $(CFLAGS) $(MODCFLAGS) $($(strip $1)_CELFFLAGS) $(basename $1).zcc -o $2
++	$(ECHO_END)
++endef
++
+ define ELFLD
+ 	$(ECHO_BEGIN)"LD: $2 "
+ 	$(Q) $(MODULELD) $(MODLDFLAGS) $(LDMAP) $(LDLIBPATH) $(ARCHCRT0OBJ) $1 $(LDSTARTGROUP) $(LDLIBS) $(LDENDGROUP) -o $2
+@@ -259,6 +271,10 @@ $(SWIFTOBJS): $(PREFIX)%$(SWIFTEXT)$(SUFFIX)$(OBJEXT): %$(SWIFTEXT)
+ 	$(if $(and $(CONFIG_MODULES), $(CELFFLAGS)), \
+ 		$(call ELFCOMPILESWIFT, $<, $@), $(call COMPILESWIFT, $<, $@))
+ 
++$(ZENCOBJS): $(PREFIX)%$(SUFFIX)$(OBJEXT): %$(ZENCEXT)
++	$(if $(and $(CONFIG_MODULES), $(CELFFLAGS)), \
++		$(call ELFCOMPILEZENC, $<, $@), $(call COMPILEZENC, $<, $@))
++
+ AROBJS :=
+ ifneq ($(OBJS),)
+ SORTOBJS := $(sort $(OBJS))
+@@ -303,7 +319,11 @@ $(MAINSWIFTOBJ): $(PREFIX)%$(SWIFTEXT)$(SUFFIX)$(OBJEXT): %$(SWIFTEXT)
+ 	$(if $(and $(CONFIG_MODULES),$(CELFFLAGS)), \
+ 		$(call ELFCOMPILESWIFT, $<, $@), $(call COMPILESWIFT, $<, $@))
+ 
+-$(PROGLIST): $(MAINCOBJ) $(MAINCXXOBJ) $(MAINRUSTOBJ) $(MAINZIGOBJ) $(MAINDOBJ) $(MAINSWIFTOBJ)
++$(MAINZENCOBJ): $(PREFIX)%$(ZENCEXT)$(SUFFIX)$(OBJEXT): %$(ZENCEXT)
++	$(if $(and $(CONFIG_MODULES),$(CELFFLAGS)), \
++		$(call ELFCOMPILEZENC, $<, $@), $(call COMPILEZENC, $<, $@))
++
++$(PROGLIST): $(MAINCOBJ) $(MAINCXXOBJ) $(MAINRUSTOBJ) $(MAINZIGOBJ) $(MAINDOBJ) $(MAINSWIFTOBJ) $(MAINZENCOBJ)
+ 	$(Q) mkdir -p $(BINDIR)
+ 	$(call ELFLD, $(PROGOBJ_$@), $(call CONVERT_PATH,$@))
+ 	$(Q) chmod +x $@
+@@ -348,6 +368,12 @@ $(MAINSWIFTOBJ): $(PREFIX)%$(SWIFTEXT)$(SUFFIX)$(OBJEXT): %$(SWIFTEXT)
+ 	$(if $(and $(CONFIG_MODULES),$(CELFFLAGS)), \
+ 		$(call ELFCOMPILESWIFT, $<, $@), $(call COMPILESWIFT, $<, $@))
+ 
++$(MAINZENCOBJ): $(PREFIX)%$(ZENCEXT)$(SUFFIX)$(OBJEXT): %$(ZENCEXT)
++	$(eval $<_CFLAGS += ${DEFINE_PREFIX}main=$(addsuffix _main,$(PROGNAME_$@)))
++	$(eval $<_CELFFLAGS += ${DEFINE_PREFIX}main=$(addsuffix _main,$(PROGNAME_$@)))
++	$(if $(and $(CONFIG_MODULES),$(CELFFLAGS)), \
++		$(call ELFCOMPILEZENC, $<, $@), $(call COMPILEZENC, $<, $@))
++
+ install::
+ 	@:
+ 
+diff --git a/Make.defs b/Make.defs
+index ab79ce71c..72cbd1d20 100644
+--- a/Make.defs
++++ b/Make.defs
+@@ -58,6 +58,7 @@ RUSTEXT ?= .rs
+ ZIGEXT ?= .zig
+ DEXT ?= .d
+ SWIFTEXT ?= .swift
++ZENCEXT ?= .zc
+ 
+ # Library path
+ 
+diff --git a/examples/pwm/pwm_main.c b/examples/pwm/pwm_main.c
+index 7a1a83c16..99dc9e5bd 100644
+--- a/examples/pwm/pwm_main.c
++++ b/examples/pwm/pwm_main.c
+@@ -539,7 +539,7 @@ int main(int argc, FAR char *argv[])
+ #  ifdef CONFIG_PWM_PULSECOUNT
+   info.count = g_pwmstate.count;
+ 
+-  printf("pwm_main: starting output "
++  printf("NO_CONFIG_PWM_MULTICHAN: starting output "
+          "with frequency: %" PRIu32 " duty: %08" PRIx32
+          " count: %" PRIx32 "\n",
+          info.frequency, (uint32_t)info.duty, info.count);

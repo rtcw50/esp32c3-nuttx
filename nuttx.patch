@@ -1,0 +1,188 @@
+diff --git a/arch/risc-v/src/common/Toolchain.defs b/arch/risc-v/src/common/Toolchain.defs
+index 084bb32758..76cd806660 100644
+--- a/arch/risc-v/src/common/Toolchain.defs
++++ b/arch/risc-v/src/common/Toolchain.defs
+@@ -486,6 +486,10 @@ include $(TOPDIR)/tools/D.defs
+ 
+ include $(TOPDIR)/tools/Swift.defs
+ 
++# ZenC toolchain
++
++include $(TOPDIR)/tools/Zenc.defs
++
+ # Shared library build flags
+ 
+ SHCCFLAGS = -fPIC -fPIE -fvisibility=default
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig b/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
+index c346b93f0d..f0b54a7674 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
+@@ -5,6 +5,7 @@
+ # You can then do "make savedefconfig" to generate a new defconfig file that includes your
+ # modifications.
+ #
++# CONFIG_ESPRESSIF_UART0 is not set
+ # CONFIG_NSH_ARGCAT is not set
+ # CONFIG_NSH_CMDOPT_HEXDUMP is not set
+ CONFIG_ARCH="risc-v"
+@@ -22,6 +23,22 @@ CONFIG_ARCH_STACKDUMP=y
+ CONFIG_BOARDCTL_RESET=y
+ CONFIG_BOARD_LOOPSPERMSEC=15000
+ CONFIG_BUILTIN=y
++CONFIG_DEV_GPIO=y
++CONFIG_ESP32C3_XIAO_BLINK=y
++CONFIG_ESP32C3_XIAO_MYPWM=y
++CONFIG_ESP32C3_XIAO_MOTCONTROL=y
++CONFIG_ESP32C3_XIAO_HELLOZ=y
++CONFIG_ESPRESSIF_GPIO_IRQ=y
++CONFIG_ESPRESSIF_LEDC=y
++CONFIG_ESPRESSIF_LEDC_CHANNEL0_PIN=3
++CONFIG_ESPRESSIF_LEDC_CHANNEL1_PIN=4
++CONFIG_ESPRESSIF_LEDC_CHANNEL2_PIN=5
++CONFIG_ESPRESSIF_LEDC_CHANNEL3_PIN=6
++CONFIG_ESPRESSIF_LEDC_TIMER0=y
++CONFIG_ESPRESSIF_LEDC_TIMER1=y
++CONFIG_ESPRESSIF_USBSERIAL=y
++CONFIG_EXAMPLES_GPIO=y
++CONFIG_EXAMPLES_PWM=y
+ CONFIG_FS_PROCFS=y
+ CONFIG_IDLETHREAD_STACKSIZE=2048
+ CONFIG_INIT_ENTRYPOINT="nsh_main"
+@@ -35,6 +52,7 @@ CONFIG_NSH_FILEIOSIZE=512
+ CONFIG_NSH_READLINE=y
+ CONFIG_NSH_STRERROR=y
+ CONFIG_PREALLOC_TIMERS=0
++CONFIG_PWM_MULTICHAN=y
+ CONFIG_RR_INTERVAL=200
+ CONFIG_SCHED_BACKTRACE=y
+ CONFIG_SCHED_WAITPID=y
+@@ -43,6 +61,3 @@ CONFIG_START_MONTH=11
+ CONFIG_START_YEAR=2019
+ CONFIG_SYSTEM_DUMPSTACK=y
+ CONFIG_SYSTEM_NSH=y
+-CONFIG_TESTING_GETPRIME=y
+-CONFIG_TESTING_OSTEST=y
+-CONFIG_UART0_SERIAL_CONSOLE=y
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
+index 4ffe981e72..b19d59fe94 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
+@@ -27,10 +27,11 @@
+  * Pre-processor Definitions
+  ****************************************************************************/
+ 
++/* Testing */
+ /* GPIO pins used by the GPIO Subsystem */
+ 
+-#define BOARD_NGPIOOUT    1 /* Amount of GPIO Output pins */
+-#define BOARD_NGPIOINT    1 /* Amount of GPIO Input w/ Interruption pins */
++#define BOARD_NGPIOOUT    10 /* Amount of GPIO Output pins */
++#define BOARD_NGPIOINT    1   /* Amount of GPIO Input w/ Interruption pins */
+ 
+ #endif /* __BOARDS_RISCV_ESP32C3_ESP32C3_XIAO_INCLUDE_BOARD_H */
+ 
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
+index 78fe996097..dccd1e7b77 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
+@@ -64,6 +64,30 @@
+ 
+ #define GPIO_OUT1  3
+ 
++/* GPIO2 is reserved as an IRQ PIN, do not use it for IO */
++#define GPIO3 3
++#define GPIO4 4
++#define GPIO5 5
++#define GPIO6 6
++#define GPIO7 7
++#define GPIO21 21
++#define GPIO20 20
++#define GPIO8 8
++#define GPIO9 9
++#define GPIO10 10
++/* We refer to pins by their Dx names in Arduino, so do it here */
++#define D1 GPIO3
++#define D2 GPIO4
++#define D3 GPIO5
++#define D4 GPIO6
++#define D5 GPIO7
++#define D6 GPIO21
++#define D7 GPIO20
++#define D8 GPIO8
++#define D9 GPIO9
++#define D10 GPIO10
++
++
+ #if !defined(CONFIG_ESPRESSIF_GPIO_IRQ) && BOARD_NGPIOINT > 0
+ #  error "NGPIOINT is > 0 and GPIO interrupts aren't enabled"
+ #endif
+@@ -73,6 +97,7 @@
+  */
+ 
+ #define GPIO_IRQPIN  2
++#define D0 GPIO_IRQPIN
+ 
+ /****************************************************************************
+  * Private Types
+@@ -128,7 +153,17 @@ static const struct gpio_operations_s gpout_ops =
+ 
+ static const uint32_t g_gpiooutputs[BOARD_NGPIOOUT] =
+ {
+-  GPIO_OUT1
++/*  GPIO_OUT1 */
++D1, /* /dev/gpio0 */
++D2,
++D3,
++D4,
++D5,
++D6,
++D7,
++D8,
++D9,
++D10   /* /dev/gpio9 */ 
+ };
+ 
+ static struct espgpio_dev_s g_gpout[BOARD_NGPIOOUT];
+diff --git a/tools/Config.mk b/tools/Config.mk
+index 59516caf5b..16e2f3636b 100644
+--- a/tools/Config.mk
++++ b/tools/Config.mk
+@@ -402,6 +402,28 @@ define COMPILESWIFT
+ 	$(ECHO_END)
+ endef
+ 
++# COMPILEZENC - Default macro to compile one Zenc file
++# Example: $(call COMPILEZENC, in-file, out-file)
++#
++# Depends on these settings defined in board-specific Make.defs file
++# installed at $(TOPDIR)/Make.defs:
++#
++#   ZENC - The command to invoke the Zenc compiler
++#   ZENCELFFLAGS - Options to pass to the Zenc compiler
++#
++# '<filename>.zenc_ZENCELFFLAGS += <options>' may also be used, as an example, to
++# change the options used with the single file <filename>.zenc. The same
++# applies mutatis mutandis.
++
++define COMPILEZENC
++	$(ECHO_BEGIN)"ZENC:  $1 "
++	$(Q) $(ZENC)  $(ZENCFLAGS) $($(strip $1)_ZENCFLAGS) $1 -o $(basename $1).zcc
++	$(ECHO_BEGIN)"CC: $(basename $1).zcc "
++	$(Q) $(CCACHE) $(CC) -x c -c $(CFLAGS) $3 $($(strip $1)_CFLAGS) $(basename $1).zcc -o $2
++	$(ECHO_END)
++endef
++
++
+ # ASSEMBLE - Default macro to assemble one assembly language file
+ # Example: $(call ASSEMBLE, in-file, out-file)
+ #
+@@ -672,6 +694,9 @@ ifeq ($(CONFIG_ARCH_TOOLCHAIN_TASKING),y)
+ 	EXTRA += *.src
+ endif
+ 
++# When building with zenc, the .zcc files generated by zenc should also be cleaned up when "make clean" is invoked.
++EXTRA += *.zcc
++
+ ifeq ($(CONFIG_WINDOWS_NATIVE),y)
+ define CLEAN
+ 	$(Q) if exist *$(OBJEXT) (del /f /q *$(OBJEXT))

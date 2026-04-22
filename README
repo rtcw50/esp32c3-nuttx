@@ -179,5 +179,53 @@ Run blink in the nsh and the red and blue LEDs with alternate flashing.
 
 
 
+21 Apr 2026
+===========
+
+I also successfully created a "mypwm" application which registers /dev/pwm0 and /dev/pwm1
+devices. Pin configuration is done via the LEDC peripheral configuration. Other
+details are located in the mypwm application directory.
+
+Crazy idea: Learn the Zen-C programming language and use it to program the xiao device.
+First tests with "Hello World" were successful. 'zc transpile' translates zen-c language
+to C11 code. When you use the translated code in a nuttx custom app, it compiles and
+works.
+
+There were a couple of hiccups to be aware of. The nuttx build system will emit this 
+on the main source compile line: -Dmain=helloz_main. That means, the translated code
+from zen-c transpile will have its 'main' function defined as 'helloz_main'. Also
+nuttx compile command emits -Werror=return-type. As a result, a simple zenc hello world
+code such as:
+
+fn main() {
+	println "Hello World"
+}
+
+does not return a value and since the 'main' function is renamed to 'helloz_main', the 
+nutt risc-v compiler will error out (due to -Werror=return-type), demanding a return value. 
+There are a couple of workarounds I see. One, simply name your main function 
+'helloz_main' in the zenc file.  The downside of this is it won't link without a 
+main function in the host compiler.
+Two, just be sure to add a 'return 0' value to the main function so that both the 
+host and target compilers are happy. The standard is lenient if the function name
+is 'main', so no error is generated. It took a while to figure this out.
+
+So the plan to make the development smooth is to have the makefile in the nuttx custom
+apps directory do the 'zc transpile' command to a .c file. Then everything should build
+in the nuttx environment. 
+
+It appears the way to do this is to add a new rule to the apps/Application.mk file
+to recognize .zc extension, perform a 'zc transpile' and then a normal c compile.
+In apps, add the ZENCEXT ?= .zc to Make.defs
+In app, Add the ZENC compile and file macro for the ZENC transpiler
+In tools, add Zenc.defs file - adds ZENC compiler and ZENCFLAGS flags defs
+In tools/Config.mk, add COMPILEZENC macro.
+In arch/risc-v/src/common/Toolchain.defs, add include Zenc.defs
+
+Next, how to clean intermediate files.
+In tools/Config.mk, add EXTRA += *.zcc to clean zen-c intermediate files.
+
+
+
 
 
