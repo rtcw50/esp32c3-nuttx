@@ -1,0 +1,50 @@
+In menuconfig:
+
+Configuration:
+
+Device Drivers -> Timer Driver Support
+  PWM Multiple Output Channel Support
+  (1) Number of Output Channels Per Timer
+
+System Type -> Peripheral Support -> LEDC.
+
+System Type -> LEDC configuration -> LEDC.
+   Timer0
+      (1) Number of Timer 0 channels
+      (13) Timer 0 resolution
+   Timer1
+      (1) Number of Timer 1 channels
+      (13) Timer 0 resolution
+
+   (3) Channel 0  //pin (GPIO3, D1)
+   (4) Channel 1  //pin (GPIO4, D2)
+
+* this seems a bit strange of a configuration for pin assignments, but it 
+apparently works. Each PWM (/dev/pwmX) can have up to 6 channels. But
+Channel in this context apparently means the pin associated with the timer.
+The configs generated (nuttx/include/nuttx/config.h) are:
+#define CONFIG_ESPRESSIF_LEDC_HPOINT 0x0000
+#define CONFIG_ESPRESSIF_LEDC_TIMER0 1
+#define CONFIG_ESPRESSIF_LEDC_TIMER0_CHANNELS 1
+#define CONFIG_ESPRESSIF_LEDC_TIMER0_RESOLUTION 13
+#define CONFIG_ESPRESSIF_LEDC_TIMER1 1
+#define CONFIG_ESPRESSIF_LEDC_TIMER1_CHANNELS 1
+#define CONFIG_ESPRESSIF_LEDC_TIMER1_RESOLUTION 13
+#define CONFIG_ESPRESSIF_LEDC_CHANNEL0_PIN 3
+#define CONFIG_ESPRESSIF_LEDC_CHANNEL1_PIN 4
+#define CONFIG_ESPRESSIF_LEDC_CHANNEL2_PIN 5
+#define CONFIG_ESPRESSIF_LEDC_CHANNEL3_PIN 6
+
+which not strictly correct since Timer0 and 1 only have 1 channel each (channel 0).
+But this is the way it is configured.
+
+
+Use the following procedure to maintain persistence in
+of the timer and gpio channel setup for mypwm app:
+
+Configure the timer and pins via menuconfig as shown above.
+make savedefconfig (in /nuttx).
+cp defconfig boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
+
+Use nsh as the base configuration since we're running the example
+via the shell.

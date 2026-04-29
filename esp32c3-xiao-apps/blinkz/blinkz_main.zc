@@ -1,0 +1,143 @@
+/****************************************************************************
+ * apps/examples/blink/blink_main.c
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
+ *
+ ****************************************************************************/
+
+/****************************************************************************
+ * Included Files
+ ****************************************************************************/
+
+import "std/result.zc";
+import "std/io.zc";
+//import "std/fs.zc";
+//import "std/string.zc";
+
+#include <nuttx/config.h>
+#include <nuttx/ioexpander/gpio.h>
+
+import "stdio.h" as stdio;
+import "sys/ioctl.h" as ioctl;
+import "signal.h" as signal;
+import "fcntl.h" as fcntl;
+import "errno.h" as errno;
+
+
+extern fn sort_int(arr: int*, len: usize);
+
+
+
+
+
+/* Define GPIO ioctl macros locally to ensure availability */
+
+/* See *nuttx/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c */
+//#define BLUE_LED 0 /* index 0 -> /dev/gpio0 -> D1 */
+//#define RED_LED  1 /* index 1 -> /dev/gpio1 -> D2 */   
+#define BLUE_LED 2 /* index 0 -> /dev/gpio0 -> D3 */
+#define RED_LED  3 /* index 1 -> /dev/gpio1 -> D4 */   
+
+
+
+/****************************************************************************
+ * Public Functions
+ ****************************************************************************/
+
+/****************************************************************************
+ * blink_main
+ ****************************************************************************/
+ fn zopen(path : String) -> Result<i32> {
+    println "Opening device file: {path}";
+  let fd : c_int = fcntl::open(path.c_str(), O_RDWR);
+    if (fd < 0) {
+        return Result<i32>::Err(errno::errno);
+    }
+    return Result<i32>::Ok(fd);
+ }
+
+@export
+fn blinkz_main(argc: int, argv: string*) -> i32
+{
+  let fd1 : c_int;
+  let fd2 : c_int;
+  let devpath: [char; 16];
+  let  ret: i32;
+
+  println "Blinkz: Toggling GPIO BLUE LED...";
+  println "Blinkz: Toggling GPIO RED LED...";
+  defer(fcntl::close(fd1));
+  defer(fcntl::close(fd2));
+
+  /* Open GPIO device files directly */
+  format_into(devpath, 16, "/dev/gpio%d", BLUE_LED);
+
+  let zopen_result = zopen(String::from(devpath));
+  if (zopen_result.is_ok()) {
+      fd1 = zopen_result.unwrap();
+  } else {
+      println "ERROR: Failed to open GPIO devices - BLUE LED";
+      return -1;
+  }
+
+//  snprintf(devpath, sizeof(devpath), "/dev/gpio%d", RED_LED);
+  format_into(devpath, 16, "/dev/gpio%d", RED_LED);
+  zopen_result = zopen(String::from(devpath));
+  if (zopen_result.is_ok()) {
+     fd2 = zopen_result.unwrap();
+  } else {
+     println "ERROR: Failed to open GPIO devices - RED LED";
+     return -1;
+  }   
+
+
+  /* Configure pins as outputs */
+  println "fd1 = {fd1}, fd2 = {fd2}";
+  ret = ioctl::ioctl(fd1, GPIOC_SETPINTYPE, GPIO_OUTPUT_PIN);
+  if (ret < 0) {
+      println "ERROR: ioctl GPIOC_SETPINTYPE failed for BLUE LED (errno: {errno::errno})";
+      return -1;
+  }
+  ret = ioctl::ioctl(fd2, GPIOC_SETPINTYPE, GPIO_OUTPUT_PIN);
+  if (ret < 0) {
+      println "ERROR: ioctl GPIOC_SETPINTYPE failed for RED LED (errno: {errno::errno})";
+      return -1;
+  }
+
+  /* Toggle 10 times*/
+    for i in 0..10 {
+       println "Blink: Toggling GPIO BLUE LED... iteration {i}";
+       println "Blink: Toggling GPIO RED LED... iteration {i}"; 
+      /* Set GPIO 10 High, GPIO 9 Low */
+      ret = ioctl::ioctl(fd1, GPIOC_WRITE, (u32)1);
+      if (ret < 0) println "ERROR: GPIOC_WRITE high failed for BLUE LED (errno: {errno::errno})";
+      ret = ioctl::ioctl(fd2, GPIOC_WRITE, (u32)0);
+      if (ret < 0) println "ERROR: GPIOC_WRITE low failed for RED LED (errno: {errno::errno})";
+      signal::usleep(500000);    
+
+      /* Set GPIO 10 Low, GPIO 9 High */
+      ret = ioctl::ioctl(fd1, GPIOC_WRITE, (u32)0);
+      if (ret < 0) println "ERROR: GPIOC_WRITE low failed for BLUE LED (errno: {errno::errno})";
+      ret = ioctl::ioctl(fd2, GPIOC_WRITE, (u32)1);
+      if (ret < 0) println "ERROR: GPIOC_WRITE high failed for RED LED (errno: {errno::errno})";
+      signal::usleep(500000);   
+  }
+
+  /* Device files closed as scope exits */
+  return 0;
+}

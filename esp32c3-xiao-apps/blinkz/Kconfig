@@ -1,0 +1,29 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config  ESP32C3_XIAO_BLINKZ
+	tristate "\"blinkz\" example"
+	default n
+	---help---
+		Enable the \"blinkz\" example
+
+if ESP32C3_XIAO_BLINKZ
+
+config ESP32C3_XIAO_BLINKZ_PROGNAME
+	string "Program name"
+	default "blinkz"
+	---help---
+		This is the name of the program that will be used when the NSH ELF
+		program is installed.
+
+config ESP32C3_XIAO_BLINKZ_PRIORITY
+	int "blinkz task priority"
+	default 100
+
+config ESP32C3_XIAO_BLINKZ_STACKSIZE
+	int "blinkz stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif

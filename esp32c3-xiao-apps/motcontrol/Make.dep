@@ -1,0 +1,65 @@
+# Gen Make.dep automatically
+motcontrol_main.c.home.jrusso.Documents.Projects.esp32c3-nuttx.esp32c3-xiao-apps.motcontrol.o: \
+ motcontrol_main.c \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/config.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/stdio.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/sys/types.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/compiler.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/stdint.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/arch/types.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/arch/inttypes.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/limits.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/arch/limits.h \
+ /opt/risc-v/lib/gcc/riscv-none-elf/13.2.0/include/stdarg.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/time.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/fs/fs.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/fs/ioctl.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/stdbool.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/serial/tioctl.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/fs/uio.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/sys/uio.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/dirent.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/atomic.h \
+ /opt/risc-v/lib/gcc/riscv-none-elf/13.2.0/include/stdatomic.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/mutex.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/assert.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/semaphore.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/errno.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/semaphore.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/queue.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/clock.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/sys/timex.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/sys/time.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/sys/select.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/signal.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/string.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/stddef.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/alloca.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/lib/math32.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/inttypes.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/strings.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/mm/map.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/mm/gran.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/spawn.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/spawn.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/sched.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/irq.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/arch/irq.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/arch/csr.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/arch/chip/irq.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/arch/mode.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/spinlock_type.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/lib/lib.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/kmalloc.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/stdlib.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/mm/mm.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/userspace.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/pthread.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/unistd.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/malloc.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/fcntl.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/sys/ioctl.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/nuttx/timers/pwm.h \
+ /home/jrusso/Documents/Projects/esp32c3-nuttx/nuttx/include/fixedmath.h
+# No files specified for dependency generation
+# No files specified for dependency generation
