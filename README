@@ -1,5 +1,5 @@
-Experiments using NuttX RTOS
-============================
+# Experiments using NuttX RTOS
+## Introduction
 
 The Arduino Maker Workshop VScode extension has been great. I successfully developed the "Watch
 Cleaner Controller" project, including a GUI using LVGL and am able to drive a motor driver
@@ -23,7 +23,7 @@ is being uploaded by bot agents. I quickly abandoned tinyos-rtos, although I'll 
 for a while to see if esp32c3 support ever does arrive. 
 
 
-Apr 10 2026:
+## Apr 10 2026: Building NUTTX
 
 Building nuttx is quite simple. The OS is very well documented. The documentation for the 
 basics of the OS is here: https://nuttx.apache.org/docs/latest/index.html. The esp32c3 specifics are
@@ -36,15 +36,18 @@ I used the Seeed Studio XIAO ESP32C3 board.
 The esp32c3-xiao board specifics are here: https://nuttx.apache.org/docs/latest/platforms/risc-v/esp32c3/boards/esp32c3-xiao/index.html
 
 To build for the Xiao board:
->git clone https://github.com/apache/nuttx.git nuttx
->git clone https://github.com/apache/nuttx-apps.git apps
->cd nuttx
->make distclean
->./tools/configure.sh esp32c3-xiao:usbnsh
->make V=1
 
-Building Custom Applications
-============================
+
+```
+git clone https://github.com/apache/nuttx.git nuttx
+git clone https://github.com/apache/nuttx-apps.git apps
+cd nuttx
+make distclean
+./tools/configure.sh esp32c3-xiao:usbnsh
+make V=1
+```
+
+## Building Custom Applications
 
 I've successfully created a custom app, built it, and executed it on the esp32c3-xiao device.
 This video has all the details: https://www.youtube.com/watch?v=O5JmnpkHRlQ
@@ -77,6 +80,7 @@ nuttx/boards/risc-v/esp32c3/esp32c3-xiao. The files modified are include/board.h
 and src/esp32c3_gpio.c. Here are the changes: 
 
 
+```
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
 index 4ffe981e72..b19d59fe94 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
@@ -157,6 +161,7 @@ index 78fe996097..dccd1e7b77 100644
  };
  
  static struct espgpio_dev_s g_gpout[BOARD_NGPIOOUT];
+ ```
 
  I don't know of a way to pull these changes out of tree. Perhaps
  creating a new custom board and populating it would work. For now,
@@ -179,8 +184,7 @@ Run blink in the nsh and the red and blue LEDs with alternate flashing.
 
 
 
-21 Apr 2026
-===========
+## 21 Apr 2026 The ZenC Experiment
 
 I also successfully created a "mypwm" application which registers /dev/pwm0 and /dev/pwm1
 devices. Pin configuration is done via the LEDC peripheral configuration. Other
@@ -225,6 +229,92 @@ In arch/risc-v/src/common/Toolchain.defs, add include Zenc.defs
 Next, how to clean intermediate files.
 In tools/Config.mk, add EXTRA += *.zcc to clean zen-c intermediate files.
 
+## 29 May 2026  Abandoning ZenC, Introducing C3
+
+ZenC, while interesting, is a bit immature at this point. Some the ideas
+are great, but I found that main issue I have is that there is no 
+mechanism to localize symbols in a ZenC module. It needs a flag something
+like:
+```
+zc -private build file.zc
+```
+which would essentially make the symbols in a module static. An 'export'
+keyword would expose the symbol beyond the module. In NUTTX, when you
+build the 'nsh' application and want to include multiple ZenC applications,
+you'll get multiply defined symbol errors. This was kind of the showstopper
+for me and ZenC. 
+
+Because I like coding pain, I guess, I started looking into Zig and another
+language call C3. Zig, although not as intimidating as Rust, is still a big
+syntax jump from C code. NUTTX has some built-in support for Zig, so there
+was that. Because I like pain, I chose to try to port C3 code to NUTTX.
+Believe it or not, I finally did it. Here's the story.
+
+https://c3-lang.org says "C3 is an evolution, not a revolution: the C-like
+for programmers who like C." The syntax is familiar and comfortable. It does
+not take a giant leap to learn the basics. Delving a bit deeper into C3, 
+I saw that it compiles down to LLVM IR, those allowing it to target a
+variety of CPU/MCU platforms. Since my target is RISCV-32, it could 
+certainly support the 32-bit RISCV target. With embedded projects,
+code size is always something to consider. My target has a 4M flash
+code space, but only 400Kb of SRAM for data, stack, and heap. It was
+a real question whether C3 could be used for an embedded application.
+Then there was the NUTTX build environment. I had successfully shoe-horned
+in ZenC support to NUTTX's makefile system. I did not know if I could
+do the same for C3. 
+
+I found that C3 compiles its standard libraries each time it compiles
+a user module. Ultimately you end up with object files for all the 
+standard library modules you use. There's also option to use external
+libc libraries. This was perfect for NUTTX, which provide a platform
+specific libc implementation. So far, so good. 
+
+So, I shoe-horned the C3 build into the NUTTX makefile environment.
+A set of standard library object files are created by the build along
+with the application object file. C3, however, declares many (most) of
+its public symbols as weak. As a result, the final link of the 'nsh'
+or even the standalone executable for NUTTX will have resolved symbols
+that resolve to address zero. This, of course, will result in 
+runtime crashes. What I ended up doing is finding all the weak,
+global symbols in the object files created by C3 compile and
+the forcing those symbols as undefined to the linker, via the -u
+flag. This forces the resolution of the symbols to valid linked
+addresses. This is especially important for libc symbols extracted
+from the NUTTX target platform libraries.
+
+Another critical item is switching to C3 version 8. I used the
+'szmageddon' branch and built it locally. This version does a 
+couple of key things. One is it corrects a 64-bit 32-bit size
+error in LLVM IR GEP for 32-bit targets. Older versions of C3
+did not address 32-bit targets properly. Secondly, it now
+supports separate sections for functions and data -- important
+for dead stripping at link time.
+
+Some additional sections were added to the boards/risc-v/
+esp32c3/common/scripts/esp32c3_section.ld file to handle .got,
+.got.plt,.tdata,.tbss sections.
+
+With that, and a couple of changes to libc.c3 to ensure stdout()
+was properly defined, I was able to execute a native C3 program
+on NUTTX on the esp32c3. "Hello World" worked. Now the size is
+large compared to a simple C program but we can work out the 
+size details later.
+
+There is a nagging problem on the makefile side, however.
+NUTTX expects the application object file name to be a fully
+qualified path name, e.g., helloc3_main.c3.home.user.Documents...helloc3.o.
+As part of the compile, I called a makefile function called RENAME to rename
+the object file. There's some type of race condition where the name does
+not get changed in time, resulting in a link error. Running make again usually
+succeeds. I'll have to look into this again. Supposely putting all the compile
+commands on the same line in a recipe forces the entire command to complete
+atomically, but this does not seem to be happening.
+
+## Next Steps
+
+The next obvious step is a blink program using C3. The interoperability
+with C is key here, since I need to invoke the NUTTX target platform 
+libraries to toggle device pins.
 
 
 

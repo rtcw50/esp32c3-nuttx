@@ -1,0 +1,29 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config  ESP32C3_XIAO_HELLOC3 
+	tristate "\"helloc3\" example"
+	default n
+	---help---
+		Enable the \"helloc3\" example
+
+if ESP32C3_XIAO_HELLOC3
+
+config ESP32C3_XIAO_HELLOC3_PROGNAME
+	string "Program name"
+	default "helloc3"
+	---help---
+		This is the name of the program that will be used when the NSH ELF
+		program is installed.
+
+config ESP32C3_XIAO_HELLOC3_PRIORITY
+	int "helloc3 task priority"
+	default 100
+
+config ESP32C3_XIAO_HELLOC3_STACKSIZE
+	int "helloc3 stack size"
+	default DEFAULT_TASK_STACKSIZE
+
+endif

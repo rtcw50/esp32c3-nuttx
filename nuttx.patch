@@ -1,8 +1,49 @@
+diff --git a/arch/risc-v/src/Makefile b/arch/risc-v/src/Makefile
+index be9ea8bdce..f08e0ec545 100644
+--- a/arch/risc-v/src/Makefile
++++ b/arch/risc-v/src/Makefile
+@@ -186,10 +186,15 @@ endef
+ $(addsuffix .tmp,$(ARCHSCRIPT)): $(ARCHSCRIPT)
+ 	$(call PREPROCESS, $(patsubst %.tmp,%,$@), $@)
+ 
++# Auto-discover C3 linker flags from all apps
++C3_LDFLAGS_DIR := $(APPDIR)$(DELIM)c3_ldflags
++C3_LDFLAGS := $(foreach file,$(wildcard $(C3_LDFLAGS_DIR)$(DELIM)*.ldflags),$(shell cat $(file)))
++
++
+ nuttx$(EXEEXT): $(HEAD_OBJ) board/libboard$(LIBEXT) $(addsuffix .tmp,$(ARCHSCRIPT))
+-	$(Q) echo "LD: nuttx"
++	$(Q) echo "LD riscv: nuttx"
+ ifeq ($(CONFIG_ALLSYMS)$(CONFIG_MM_KASAN_GLOBAL),)
+-	$(Q) $(LD) $(LDENTRY) $(LDFLAGS) $(LIBPATHS) $(EXTRA_LIBPATHS) \
++	$(Q) $(LD) $(LDENTRY) $(LDFLAGS) $(C3_LDFLAGS) $(LIBPATHS) $(EXTRA_LIBPATHS) \
+ 		-o $(NUTTX) $(HEAD_OBJ) $(EXTRA_OBJS) \
+ 		$(LDSTARTGROUP) $(LDLIBS) $(EXTRA_LIBS) $(LDENDGROUP)
+ else
 diff --git a/arch/risc-v/src/common/Toolchain.defs b/arch/risc-v/src/common/Toolchain.defs
-index 084bb32758..76cd806660 100644
+index 084bb32758..0978cff48a 100644
 --- a/arch/risc-v/src/common/Toolchain.defs
 +++ b/arch/risc-v/src/common/Toolchain.defs
-@@ -486,6 +486,10 @@ include $(TOPDIR)/tools/D.defs
+@@ -117,7 +117,8 @@ endif
+ SHMODULEFLAGS = -Bsymbolic -G -Bdynamic --entry=__start
+ 
+ ifeq ($(CONFIG_ARCH_RV32),y)
+-LDFLAGS += -melf32lriscv
++#LDFLAGS += -melf32lriscv --undefined std.io.stdout
++LDFLAGS += -melf32lriscv  $(C3_UNDEFINED_SYMBOLS) 
+ SHMODULEFLAGS += -melf32lriscv
+ else ifeq ($(CONFIG_ARCH_RV64ILP32),y)
+ LDFLAGS += -melf32lriscv
+@@ -128,7 +129,7 @@ endif
+ # Optimization of unused sections
+ 
+ ifeq ($(CONFIG_DEBUG_OPT_UNUSED_SECTIONS),y)
+-  LDFLAGS          += --gc-sections
++  LDFLAGS          += --gc-sections --print-map-discarded
+   ARCHOPTIMIZATION += -ffunction-sections -fdata-sections
+ endif
+ 
+@@ -486,6 +487,13 @@ include $(TOPDIR)/tools/D.defs
  
  include $(TOPDIR)/tools/Swift.defs
  
@@ -10,11 +51,47 @@ index 084bb32758..76cd806660 100644
 +
 +include $(TOPDIR)/tools/Zenc.defs
 +
++# C3 toolchain
++include $(TOPDIR)/tools/C3.defs
++
  # Shared library build flags
  
  SHCCFLAGS = -fPIC -fPIE -fvisibility=default
+diff --git a/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld b/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld
+index e3129b0b68..efa59e09a8 100644
+--- a/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld
++++ b/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld
+@@ -267,6 +267,8 @@ SECTIONS
+     . = ALIGN (16);
+     _data_start = ABSOLUTE(.);
+     _sdata = ABSOLUTE(.);
++    *(.got)
++    *(.got.plt)
+     *(.data)
+     *(.data.*)
+     *(.gnu.linkonce.d.*)
+@@ -364,6 +366,9 @@ SECTIONS
+ 
+     esp_head.*(.rodata .rodata.*)
+     esp_start.*(.rodata .rodata.*)
++    _stdata = ABSOLUTE(.);
++    *(.tdata*)
++    _etdata = ABSOLUTE(.);
+ 
+     _edata = ABSOLUTE(.);
+     _data_end = ABSOLUTE(.);
+@@ -390,6 +395,9 @@ SECTIONS
+     *(.bss.*)
+     *(.share.mem)
+     *(.gnu.linkonce.b.*)
++    _stbss = ABSOLUTE(.);
++    *(.tbss*)
++    _etbss = ABSOLUTE(.);
+     *(COMMON)
+ 
+     . = ALIGN (8);
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig b/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
-index c346b93f0d..f0b54a7674 100644
+index c346b93f0d..c2bb6341d9 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
 @@ -5,6 +5,7 @@
@@ -25,7 +102,7 @@ index c346b93f0d..f0b54a7674 100644
  # CONFIG_NSH_ARGCAT is not set
  # CONFIG_NSH_CMDOPT_HEXDUMP is not set
  CONFIG_ARCH="risc-v"
-@@ -22,6 +23,22 @@ CONFIG_ARCH_STACKDUMP=y
+@@ -22,6 +23,24 @@ CONFIG_ARCH_STACKDUMP=y
  CONFIG_BOARDCTL_RESET=y
  CONFIG_BOARD_LOOPSPERMSEC=15000
  CONFIG_BUILTIN=y
@@ -33,7 +110,9 @@ index c346b93f0d..f0b54a7674 100644
 +CONFIG_ESP32C3_XIAO_BLINK=y
 +CONFIG_ESP32C3_XIAO_MYPWM=y
 +CONFIG_ESP32C3_XIAO_MOTCONTROL=y
-+CONFIG_ESP32C3_XIAO_HELLOZ=y
++CONFIG_ESP32C3_XIAO_HELLOZ=n
++CONFIG_ESP32C3_XIAO_BLINKZ=n
++CONFIG_ESP32C3_XIAO_HELLOC3=y
 +CONFIG_ESPRESSIF_GPIO_IRQ=y
 +CONFIG_ESPRESSIF_LEDC=y
 +CONFIG_ESPRESSIF_LEDC_CHANNEL0_PIN=3
@@ -48,7 +127,7 @@ index c346b93f0d..f0b54a7674 100644
  CONFIG_FS_PROCFS=y
  CONFIG_IDLETHREAD_STACKSIZE=2048
  CONFIG_INIT_ENTRYPOINT="nsh_main"
-@@ -35,6 +52,7 @@ CONFIG_NSH_FILEIOSIZE=512
+@@ -35,6 +54,7 @@ CONFIG_NSH_FILEIOSIZE=512
  CONFIG_NSH_READLINE=y
  CONFIG_NSH_STRERROR=y
  CONFIG_PREALLOC_TIMERS=0
@@ -56,7 +135,7 @@ index c346b93f0d..f0b54a7674 100644
  CONFIG_RR_INTERVAL=200
  CONFIG_SCHED_BACKTRACE=y
  CONFIG_SCHED_WAITPID=y
-@@ -43,6 +61,3 @@ CONFIG_START_MONTH=11
+@@ -43,6 +63,3 @@ CONFIG_START_MONTH=11
  CONFIG_START_YEAR=2019
  CONFIG_SYSTEM_DUMPSTACK=y
  CONFIG_SYSTEM_NSH=y
@@ -144,10 +223,10 @@ index 78fe996097..dccd1e7b77 100644
  
  static struct espgpio_dev_s g_gpout[BOARD_NGPIOOUT];
 diff --git a/tools/Config.mk b/tools/Config.mk
-index 59516caf5b..16e2f3636b 100644
+index 59516caf5b..59b9af26c6 100644
 --- a/tools/Config.mk
 +++ b/tools/Config.mk
-@@ -402,6 +402,28 @@ define COMPILESWIFT
+@@ -402,6 +402,49 @@ define COMPILESWIFT
  	$(ECHO_END)
  endef
  
@@ -172,11 +251,32 @@ index 59516caf5b..16e2f3636b 100644
 +	$(ECHO_END)
 +endef
 +
++# COMPILEC3 - Default macro to compile one c3 file
++# Note: c3c compile-only will compile all the std lib modules as .o 
++# The std lib objects will be specified as EXTOBJS in the app makefile
++# Example: $(call COMPILEC3, in-file, out-file)
++#
++# Depends on these settings defined in board-specific Make.defs file
++# installed at $(TOPDIR)/Make.defs:
++#
++#   C3C - The command to invoke the C3 compiler
++#   C3CFLAGS - Options to pass to the C3 compiler
++#
++# '<filename>.c3_C3ELFFLAGS += <options>' may also be used, as an example, to
++# change the options used with the single file <filename>.c3. The same
++# applies mutatis mutandis.
++
++define COMPILEC3
++	$(ECHO_BEGIN)"C3C:  $1 "
++	$(Q) $(C3C)  $(C3CFLAGS) $($(strip $1)_C3CFLAGS) $1;  $(call C3_RENAME, $1, $2)
++	$(ECHO_END)
++endef
++
 +
  # ASSEMBLE - Default macro to assemble one assembly language file
  # Example: $(call ASSEMBLE, in-file, out-file)
  #
-@@ -672,6 +694,9 @@ ifeq ($(CONFIG_ARCH_TOOLCHAIN_TASKING),y)
+@@ -672,6 +715,9 @@ ifeq ($(CONFIG_ARCH_TOOLCHAIN_TASKING),y)
  	EXTRA += *.src
  endif
  
