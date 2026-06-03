@@ -1,5 +1,5 @@
 diff --git a/Application.mk b/Application.mk
-index e99300644..b12ddbdf0 100644
+index e99300644..23495ed15 100644
 --- a/Application.mk
 +++ b/Application.mk
 @@ -93,6 +93,8 @@ RUSTOBJS = $(RUSTSRCS:%=$(PREFIX)%$(SUFFIX)$(OBJEXT))
@@ -50,7 +50,7 @@ index e99300644..b12ddbdf0 100644
  
  DEPPATH += --dep-path .
  DEPPATH += --obj-path .
-@@ -214,6 +222,20 @@ define ELFCOMPILESWIFT
+@@ -214,6 +222,21 @@ define ELFCOMPILESWIFT
  	$(ECHO_END)
  endef
  
@@ -64,14 +64,15 @@ index e99300644..b12ddbdf0 100644
 +
 +define ELFCOMPILEC3
 +	$(ECHO_BEGIN)"C3C:  $1 " 
-+	$(Q) $(C3C)  $(C3ELFFLAGS) $($(strip $1)_C3ELFFLAGS) $1; $(call C3_RENAME, $1, $2)
++	$(Q) $(C3C)  $(C3ELFFLAGS) $($(strip $1)_C3ELFFLAGS) $1 -o $2
++	$(Q) $(call C3_CREATE_LDFLAGS,$2)
 +	$(ECHO_END)
 +endef
 +
  define ELFLD
  	$(ECHO_BEGIN)"LD: $2 "
  	$(Q) $(MODULELD) $(MODLDFLAGS) $(LDMAP) $(LDLIBPATH) $(ARCHCRT0OBJ) $1 $(LDSTARTGROUP) $(LDLIBS) $(LDENDGROUP) -o $2
-@@ -259,6 +281,18 @@ $(SWIFTOBJS): $(PREFIX)%$(SWIFTEXT)$(SUFFIX)$(OBJEXT): %$(SWIFTEXT)
+@@ -259,6 +282,18 @@ $(SWIFTOBJS): $(PREFIX)%$(SWIFTEXT)$(SUFFIX)$(OBJEXT): %$(SWIFTEXT)
  	$(if $(and $(CONFIG_MODULES), $(CELFFLAGS)), \
  		$(call ELFCOMPILESWIFT, $<, $@), $(call COMPILESWIFT, $<, $@))
  
@@ -90,7 +91,7 @@ index e99300644..b12ddbdf0 100644
  AROBJS :=
  ifneq ($(OBJS),)
  SORTOBJS := $(sort $(OBJS))
-@@ -303,7 +337,16 @@ $(MAINSWIFTOBJ): $(PREFIX)%$(SWIFTEXT)$(SUFFIX)$(OBJEXT): %$(SWIFTEXT)
+@@ -303,7 +338,16 @@ $(MAINSWIFTOBJ): $(PREFIX)%$(SWIFTEXT)$(SUFFIX)$(OBJEXT): %$(SWIFTEXT)
  	$(if $(and $(CONFIG_MODULES),$(CELFFLAGS)), \
  		$(call ELFCOMPILESWIFT, $<, $@), $(call COMPILESWIFT, $<, $@))
  
@@ -108,7 +109,7 @@ index e99300644..b12ddbdf0 100644
  	$(Q) mkdir -p $(BINDIR)
  	$(call ELFLD, $(PROGOBJ_$@), $(call CONVERT_PATH,$@))
  	$(Q) chmod +x $@
-@@ -348,6 +391,20 @@ $(MAINSWIFTOBJ): $(PREFIX)%$(SWIFTEXT)$(SUFFIX)$(OBJEXT): %$(SWIFTEXT)
+@@ -348,6 +392,20 @@ $(MAINSWIFTOBJ): $(PREFIX)%$(SWIFTEXT)$(SUFFIX)$(OBJEXT): %$(SWIFTEXT)
  	$(if $(and $(CONFIG_MODULES),$(CELFFLAGS)), \
  		$(call ELFCOMPILESWIFT, $<, $@), $(call COMPILESWIFT, $<, $@))
  

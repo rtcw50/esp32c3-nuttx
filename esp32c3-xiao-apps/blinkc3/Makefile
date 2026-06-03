@@ -24,19 +24,19 @@ include $(APPDIR)/Make.defs
 
 #  built-in application info
 
-PROGNAME  = $(CONFIG_ESP32C3_XIAO_HELLOC3_PROGNAME)
-PRIORITY  = $(CONFIG_ESP32C3_XIAO_HELLOC3_PRIORITY)
-STACKSIZE = $(CONFIG_ESP32C3_XIAO_HELLOC3_STACKSIZE)
-MODULE    = $(CONFIG_ESP32C3_XIAO_HELLOC3)
+PROGNAME  = $(CONFIG_ESP32C3_XIAO_BLINKC3_PROGNAME)
+PRIORITY  = $(CONFIG_ESP32C3_XIAO_BLINKC3_PRIORITY)
+STACKSIZE = $(CONFIG_ESP32C3_XIAO_BLINKC3_STACKSIZE)
+MODULE    = $(CONFIG_ESP32C3_XIAO_BLINKC3)
 
-# helloc3 
+# blinkc3 
 
-MAINSRC = helloc3_main.c3
+MAINSRC = blinkc3_main.c3
+CSRCS = blinkc3_bridge.c
 
-# Add your C3 project objects to the list of objects NuttX needs to link
+# Add your C3 object to the list of objects NuttX needs to link
 # This ensures it's included in the final binary
-# The helloc3_bridge.c file is a C file that provides a bridge between the C3 code and the NuttX system calls
-MODULE_OBJS = helloc3_main.o
+MODULE_OBJS = blinkc3_main.o
 
 
 include $(APPDIR)/Application.mk

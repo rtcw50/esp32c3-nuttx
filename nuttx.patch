@@ -91,7 +91,7 @@ index e3129b0b68..efa59e09a8 100644
  
      . = ALIGN (8);
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig b/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
-index c346b93f0d..c2bb6341d9 100644
+index c346b93f0d..3c4c52fb93 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
 @@ -5,6 +5,7 @@
@@ -102,16 +102,11 @@ index c346b93f0d..c2bb6341d9 100644
  # CONFIG_NSH_ARGCAT is not set
  # CONFIG_NSH_CMDOPT_HEXDUMP is not set
  CONFIG_ARCH="risc-v"
-@@ -22,6 +23,24 @@ CONFIG_ARCH_STACKDUMP=y
+@@ -22,12 +23,24 @@ CONFIG_ARCH_STACKDUMP=y
  CONFIG_BOARDCTL_RESET=y
  CONFIG_BOARD_LOOPSPERMSEC=15000
  CONFIG_BUILTIN=y
 +CONFIG_DEV_GPIO=y
-+CONFIG_ESP32C3_XIAO_BLINK=y
-+CONFIG_ESP32C3_XIAO_MYPWM=y
-+CONFIG_ESP32C3_XIAO_MOTCONTROL=y
-+CONFIG_ESP32C3_XIAO_HELLOZ=n
-+CONFIG_ESP32C3_XIAO_BLINKZ=n
 +CONFIG_ESP32C3_XIAO_HELLOC3=y
 +CONFIG_ESPRESSIF_GPIO_IRQ=y
 +CONFIG_ESPRESSIF_LEDC=y
@@ -122,12 +117,67 @@ index c346b93f0d..c2bb6341d9 100644
 +CONFIG_ESPRESSIF_LEDC_TIMER0=y
 +CONFIG_ESPRESSIF_LEDC_TIMER1=y
 +CONFIG_ESPRESSIF_USBSERIAL=y
-+CONFIG_EXAMPLES_GPIO=y
+ CONFIG_FS_PROCFS=y
+ CONFIG_IDLETHREAD_STACKSIZE=2048
+ CONFIG_INIT_ENTRYPOINT="nsh_main"
+ CONFIG_INTELHEX_BINARY=y
+ CONFIG_LIBC_PERROR_STDOUT=y
+ CONFIG_LIBC_STRERROR=y
++CONFIG_LIB_SYSCALL=y
+ CONFIG_NFILE_DESCRIPTORS_PER_BLOCK=6
+ CONFIG_NSH_ARCHINIT=y
+ CONFIG_NSH_BUILTIN_APPS=y
+@@ -35,14 +48,14 @@ CONFIG_NSH_FILEIOSIZE=512
+ CONFIG_NSH_READLINE=y
+ CONFIG_NSH_STRERROR=y
+ CONFIG_PREALLOC_TIMERS=0
++CONFIG_PWM_MULTICHAN=y
+ CONFIG_RR_INTERVAL=200
+ CONFIG_SCHED_BACKTRACE=y
++CONFIG_SCHED_THREAD_LOCAL=y
+ CONFIG_SCHED_WAITPID=y
+ CONFIG_START_DAY=29
+ CONFIG_START_MONTH=11
+ CONFIG_START_YEAR=2019
+ CONFIG_SYSTEM_DUMPSTACK=y
+ CONFIG_SYSTEM_NSH=y
+-CONFIG_TESTING_GETPRIME=y
+-CONFIG_TESTING_OSTEST=y
+-CONFIG_UART0_SERIAL_CONSOLE=y
++CONFIG_RISCV_PERCPU_SCRATCH=y
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/configs/usbnsh/defconfig b/boards/risc-v/esp32c3/esp32c3-xiao/configs/usbnsh/defconfig
+index ccbe39afe7..06aea00e33 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/configs/usbnsh/defconfig
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/configs/usbnsh/defconfig
+@@ -23,14 +23,27 @@ CONFIG_ARCH_STACKDUMP=y
+ CONFIG_BOARDCTL_RESET=y
+ CONFIG_BOARD_LOOPSPERMSEC=15000
+ CONFIG_BUILTIN=y
++CONFIG_DEV_GPIO=y
++CONFIG_ESP32C3_XIAO_BLINK=y
++CONFIG_ESP32C3_XIAO_HELLOC3=y
++CONFIG_ESPRESSIF_GPIO_IRQ=y
++CONFIG_ESPRESSIF_LEDC=y
++CONFIG_ESPRESSIF_LEDC_CHANNEL0_PIN=3
++CONFIG_ESPRESSIF_LEDC_CHANNEL1_PIN=4
++CONFIG_ESPRESSIF_LEDC_CHANNEL2_PIN=5
++CONFIG_ESPRESSIF_LEDC_CHANNEL3_PIN=6
++CONFIG_ESPRESSIF_LEDC_TIMER0=y
++CONFIG_ESPRESSIF_LEDC_TIMER1=y
+ CONFIG_ESPRESSIF_USBSERIAL=y
+ CONFIG_EXAMPLES_HELLO=y
 +CONFIG_EXAMPLES_PWM=y
  CONFIG_FS_PROCFS=y
  CONFIG_IDLETHREAD_STACKSIZE=2048
  CONFIG_INIT_ENTRYPOINT="nsh_main"
-@@ -35,6 +54,7 @@ CONFIG_NSH_FILEIOSIZE=512
+ CONFIG_INTELHEX_BINARY=y
+ CONFIG_LIBC_PERROR_STDOUT=y
+ CONFIG_LIBC_STRERROR=y
++CONFIG_LIB_SYSCALL=y
+ CONFIG_NFILE_DESCRIPTORS_PER_BLOCK=6
+ CONFIG_NSH_ARCHINIT=y
+ CONFIG_NSH_BUILTIN_APPS=y
+@@ -38,6 +51,7 @@ CONFIG_NSH_FILEIOSIZE=512
  CONFIG_NSH_READLINE=y
  CONFIG_NSH_STRERROR=y
  CONFIG_PREALLOC_TIMERS=0
@@ -135,13 +185,6 @@ index c346b93f0d..c2bb6341d9 100644
  CONFIG_RR_INTERVAL=200
  CONFIG_SCHED_BACKTRACE=y
  CONFIG_SCHED_WAITPID=y
-@@ -43,6 +63,3 @@ CONFIG_START_MONTH=11
- CONFIG_START_YEAR=2019
- CONFIG_SYSTEM_DUMPSTACK=y
- CONFIG_SYSTEM_NSH=y
--CONFIG_TESTING_GETPRIME=y
--CONFIG_TESTING_OSTEST=y
--CONFIG_UART0_SERIAL_CONSOLE=y
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
 index 4ffe981e72..b19d59fe94 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
@@ -160,6 +203,18 @@ index 4ffe981e72..b19d59fe94 100644
  
  #endif /* __BOARDS_RISCV_ESP32C3_ESP32C3_XIAO_INCLUDE_BOARD_H */
  
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_appinit.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_appinit.c
+index 6113c90337..3fd3509f5f 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_appinit.c
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_appinit.c
+@@ -75,7 +75,6 @@ int board_app_initialize(uintptr_t arg)
+   return OK;
+ #else
+   /* Perform board-specific initialization */
+-
+   return esp_bringup();
+ #endif
+ }
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
 index 78fe996097..dccd1e7b77 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
@@ -223,10 +278,10 @@ index 78fe996097..dccd1e7b77 100644
  
  static struct espgpio_dev_s g_gpout[BOARD_NGPIOOUT];
 diff --git a/tools/Config.mk b/tools/Config.mk
-index 59516caf5b..59b9af26c6 100644
+index 59516caf5b..bd9b573c46 100644
 --- a/tools/Config.mk
 +++ b/tools/Config.mk
-@@ -402,6 +402,49 @@ define COMPILESWIFT
+@@ -402,6 +402,52 @@ define COMPILESWIFT
  	$(ECHO_END)
  endef
  
@@ -254,6 +309,8 @@ index 59516caf5b..59b9af26c6 100644
 +# COMPILEC3 - Default macro to compile one c3 file
 +# Note: c3c compile-only will compile all the std lib modules as .o 
 +# The std lib objects will be specified as EXTOBJS in the app makefile
++# unless --single-module=yes is used, in which case all the std lib modules 
++# will be compiled into a single .o file
 +# Example: $(call COMPILEC3, in-file, out-file)
 +#
 +# Depends on these settings defined in board-specific Make.defs file
@@ -268,7 +325,8 @@ index 59516caf5b..59b9af26c6 100644
 +
 +define COMPILEC3
 +	$(ECHO_BEGIN)"C3C:  $1 "
-+	$(Q) $(C3C)  $(C3CFLAGS) $($(strip $1)_C3CFLAGS) $1;  $(call C3_RENAME, $1, $2)
++	$(Q) $(C3C)  $(C3CFLAGS) $($(strip $1)_C3CFLAGS) $1 -o $2
++	$(Q) $(call C3_CREATE_LDFLAGS,$2)
 +	$(ECHO_END)
 +endef
 +
@@ -276,7 +334,7 @@ index 59516caf5b..59b9af26c6 100644
  # ASSEMBLE - Default macro to assemble one assembly language file
  # Example: $(call ASSEMBLE, in-file, out-file)
  #
-@@ -672,6 +715,9 @@ ifeq ($(CONFIG_ARCH_TOOLCHAIN_TASKING),y)
+@@ -672,6 +718,9 @@ ifeq ($(CONFIG_ARCH_TOOLCHAIN_TASKING),y)
  	EXTRA += *.src
  endif
  
