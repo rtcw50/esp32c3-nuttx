@@ -57,6 +57,20 @@ index 084bb32758..0978cff48a 100644
  # Shared library build flags
  
  SHCCFLAGS = -fPIC -fPIE -fvisibility=default
+diff --git a/arch/risc-v/src/common/espressif/esp_usbserial.c b/arch/risc-v/src/common/espressif/esp_usbserial.c
+index 90aa161913..2265843d54 100644
+--- a/arch/risc-v/src/common/espressif/esp_usbserial.c
++++ b/arch/risc-v/src/common/espressif/esp_usbserial.c
+@@ -121,7 +121,8 @@ static struct uart_ops_s g_uart_ops =
+   .rxint       = esp_rxint,
+   .rxavailable = esp_rxavailable,
+   .txready     = esp_txready,
+-  .txempty     = NULL,
++//  .txempty     = NULL,
++  .txempty     = esp_txready,
+   .send        = esp_send,
+   .receive     = esp_receive,
+   .ioctl       = esp_ioctl,
 diff --git a/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld b/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld
 index e3129b0b68..efa59e09a8 100644
 --- a/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld
@@ -344,3 +358,84 @@ index 59516caf5b..bd9b573c46 100644
  ifeq ($(CONFIG_WINDOWS_NATIVE),y)
  define CLEAN
  	$(Q) if exist *$(OBJEXT) (del /f /q *$(OBJEXT))
+--- /dev/null	2026-06-15 16:25:15.883986707 -0500
++++ tools/Zenc.defs	2026-04-24 19:03:53.837547984 -0500
+@@ -0,0 +1,26 @@
++############################################################################
++# tools/Zenc.defs
++#
++# SPDX-License-Identifier: Apache-2.0
++#
++# Licensed to the Apache Software Foundation (ASF) under one or more
++# contributor license agreements.  See the NOTICE file distributed with
++# this work for additional information regarding copyright ownership.  The
++# ASF licenses this file to you under the Apache License, Version 2.0 (the
++# "License"); you may not use this file except in compliance with the
++# License.  You may obtain a copy of the License at
++#
++#   http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
++# License for the specific language governing permissions and limitations
++# under the License.
++#
++############################################################################
++
++ZENC := zc 
++
++ZENCFLAGS := transpile -q --hide-symbols 
++
+--- /dev/null	2026-06-15 16:25:15.883986707 -0500
++++ tools/C3.defs	2026-06-01 08:17:35.641172740 -0500
+@@ -0,0 +1,48 @@
++############################################################################
++# tools/c3.defs
++#
++# SPDX-License-Identifier: Apache-2.0
++#
++# Licensed to the Apache Software Foundation (ASF) under one or more
++# contributor license agreements.  See the NOTICE file distributed with
++# this work for additional information regarding copyright ownership.  The
++# ASF licenses this file to you under the Apache License, Version 2.0 (the
++# "License"); you may not use this file except in compliance with the
++# License.  You may obtain a copy of the License at
++#
++#   http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
++# License for the specific language governing permissions and limitations
++# under the License.
++#
++############################################################################
++
++C3C := c3c 
++
++C3CFLAGS := compile-only --single-module=yes -D NUTTX_PLATFORM --target elf-riscv32 --riscv-cpu=rvimac --custom-libc=yes --link-libc=yes --obj-out .
++
++# Create a linker command snippet that lists the undefined, weak symbols
++# in the C3 standard library.
++C3_GET_UNDEFINED_SYMBOLS = $(shell riscv-none-elf-nm  $1 | awk '$$2 == "w" || $$2 == "W" {printf " -u %s", $$3 } $$$$1 == "w" {printf " -u %s", $$2}')
++
++define C3_RENAME
++  $(Q) $(shell mv $(basename $1)$(OBJEXT) $2)
++endef
++
++# Not used: This function partially links the user file with the C3 standard library
++# to create the application object file. This is necessary because the references
++# in the application file after a c3c compile are weak and are not resolved by a 
++# normal link with the standard library object files. Also transforms module.o to
++# the long path name
++define C3_PARTIAL_LINK
++    $(Q) $(LD) -m elf32lriscv -r --gc-sections --entry=$(basename $1) -o $2 $(basename $1)$(OBJEXT)
++endef
++
++
++define C3_CREATE_LDFLAGS
++    mkdir -p $(APPDIR)$(DELIM)c3_ldflags
++    riscv-none-elf-nm $1 | awk '$$2 == "w" || $$2 == "W" {printf " -u %s", $$3 } $$1 == "w" {printf " -u %s", $$2}' > $(APPDIR)$(DELIM)c3_ldflags/$(PROGNAME).ldflags 
++endef
+\ No newline at end of file

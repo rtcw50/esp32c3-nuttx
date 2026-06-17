@@ -316,6 +316,145 @@ The next obvious step is a blink program using C3. The interoperability
 with C is key here, since I need to invoke the NUTTX target platform 
 libraries to toggle device pins.
 
+## blinkc3 Program
+
+The blinkc3_main program is successfully working. The LED blinks as designed.
+The program is located in esp32c3-xiao-apps/blinkc3. Obviously, I needed to 
+use the ioctl functions from nuttx target specific libraries. This is easily 
+accomplished in c3 by simply declaring the external C functions:
+```c
+extern fn int ioctl(int fd, int request, int arg);
+```
+The question of how to handle C defines in a C3 program took a bit more thought.
+To import #define definitions into C3, I included a C file into the build and 
+create wrapper functions for the defines I need to import.
+blink_bridge.c:
+```c
+#include <fcntl.h>
+#include <nuttx/ioexpander/gpio.h>
+
+int system_O_RDWR(void) {
+  return O_RDWR;
+}
+```
+blinkc3_main.c3:
+```c
+extern fn int system_O_RDWR(void);
+```
+
+This seems to work fine.
+Was there any advantage to using C3 for the blink program?
+Really not much in this simple program. Using optionals 
+to open files was cool and using defer to close files was
+helpful. Other than that, it looks like C.
+
+## Back to the Motor Controller
+
+I'm still keen to design my motor controller using proper
+RTOS techniques. Ultimately, since I have touchscreen display,
+the interface will be developed using LVGL. But I want to 
+make progress on motor controller state machine, so I wanted 
+to develop a simple text UI to act as the interface in one 
+thread and the motor controller to receive commands and report
+back status in another thread. 
+
+This led me down another 
+rabbit hole in designing a proper text UI. I asked Gemini how
+to do this and it reported back to use ncurses. Then I went 
+back and told Gemini that we must do this natively using the
+termios APIs. Gemini generated a program that worked perfectly on 
+a host. The challenge was to port this esp32c3. It pretty 
+much ported without issue, but would crash almost immediately.
+Recall that in nuttx if you have 'nsh' application, it displays
+a prompt from which you can call other modules. A text UI would
+compete with nsh for "control" of the picocom terminal. 
+
+But this wasn't the cause of the crasher. I took awhile to 
+get the gdb debugger to work, but gdb eventually led me to 
+the null pointer access that was causing the problem.
+The serial IO for different platforms are abstracted in nuttx.
+Each platform must defined the implementations of the interfaces
+required to complete serial IO to a terminal or emulated terminal.
+In this case, the key file is nuttx/arch/risc-v/src/common/espressif/esp_usbserial.c
+The null pointer access was caused by accessing the 'txempty' member of
+static struct uart_ops_s g_uart_ops structure. It is set to NULL in esp_usbserial.c.
+The function 'esp_txready' provides the exact behavior required (according to Gemini),
+so defining 'txempty' to esp_txready was the fix.
+
+So now my text UI works on esp32c3 (mostly). I can boot into a 'nsh>' shell, 
+and then execute 'motcontrol'. The termios-based text UI, comes up and responds
+correctly. If I exit motcontrol (with the 'exit' command), and then re-run 
+'motcontrol', then the text UI does not come up again. I think this will be
+solved when I make 'motcontrol' a standalone application. I'll move on to the
+state machine development now. 
+
+## Using the Debugger in the Nuttx Environment.
+
+Once I got the debugger working, it worked very well in Nuttx.
+Getting there was a bit of a struggle, though. Mainly due to me 
+having to go down the learning curve. Here are the steps required.
+
+1. Build Nuttx with debugging enabled
+    * CONFIG_DEBUG_SYMBOLS=y
+    * CONFIG_DEBUG_SYMBOLS_LEVEL="-g"
+2. Start openocd
+3. Start riscv-none-elf-gdb
+4. Start picocom
+
+### OpenOCD
+
+You must have the espressif openocd installed and in your path. You can do this by
+installing the Espressif tools. The command to start is:
+```bash
+openocd -f board/esp32c3-builtin.cfg -f openocd_fix.cfg 
+```
+openocd_fix.cfg:
+```
+# Force OpenOCD to stop presenting the complex memory map to GDB
+gdb memory_map disable
+
+# Tell OpenOCD to handle flash programming manually if needed
+gdb flash_program enable
+
+# RTOS awareness
+set ESP_RTOS nuttx
+```
+
+### riscv-none-elf-gdb
+
+```bash
+riscv-none-elf-gdb ./nuttx
+(gdb) target extended-remote :3333
+(gdb) cont
+```
+To restart the program
+```bash
+(gdb) monitor reset halt
+(gdb) cont
+```
+**Important** Use 'hbreak' to set breakpoints instead of break.
+```bash
+(gdb) hbreak motcontrol_main
+```
+Since we are executing from flash memory, normal breakpoints won't
+work since that implies rewriting the instruction at the breakpoint.
+You have a limited number of hardware breakpoints, so don't go crazy.
+
+### picocom
+The picocom command is:
+```bash
+picocom -b 115200 /dev/ttyACM0
+```
+When you 'cont' in gdb, you should get the 'nsh>' prompt in picocom.
+You can then Ctrl-C in gdb to set a hardware breakpoint at your module
+entry point and then 'cont' again. It should stop at your module.
+
+*Hint* Use ctrl-a, ctrl-x to exit picocom without having to disconnect
+any USB cables.
+
+
+
+
 
 
 
