@@ -452,6 +452,50 @@ entry point and then 'cont' again. It should stop at your module.
 *Hint* Use ctrl-a, ctrl-x to exit picocom without having to disconnect
 any USB cables.
 
+### esptool
+
+As mention earlier, the flash command I use is:
+
+```bash
+esptool -c esp32c3 -p /dev/ttyACM0 -b 115200 write-flash -fs 4MB -fm dio -ff 80m 0x0000 nuttx.bin
+```
+## Back to the Motor Controller - Part 2
+
+July 10, 2026.
+
+I've been struggling with the text UI for some time now, 
+but it appears that I have it working as a standalone NUTTX
+program. The refresh problems have been solved by separating
+the display into 2 panes and refreshing the pane only when 
+it becomes "dirty" (changes). This way I can smoothly update
+the countdown time display without having to refresh the other
+pane. 
+
+So now the main program creates 2 tasks: the motor control
+task and the UI task. The tasks communicate via 2 message
+queues. The 'run_cleaning_cycle' loop is the heart of the
+motor controller. The UI sends a message to "run", and 
+the 'run_cleaning_cycle' begins. The loop in the 'run_cleaning_cycle'
+sends a message to the UI each seconds with the time remaining so
+the UI can update the countdown time display. Within the 'run_cleaning_cycle'
+loop, I check for messages from the UI to stop, pause, or abort the cycle.
+There is also a check as to whether the agitate_duration time has passed.
+This reverses the motor when an agitate_duration time has passed. The
+motor always "ramps up" and "ramps down" according to the ramp time
+setting. Abort stops the motor immediately.
+
+Still to be done is real time modification of the motor speed.
+For this, the 'run_cleaning_cycle' loop will need a message 
+from the UI that the motor speed has changed and adjust the target
+duty cycle accordingly.
+
+I have seen some crashes. These seems to happen when I input
+the commands too fast. Perhaps the message queue gets overloaded.
+
+Next step, get the PWM drivers integrated into the motor control unit.
+I believe I'll want a motor_driver.c module that handles the physical
+driving of GPIO pins. It will set the motor direction and duty cycle.
+I'll use LEDs as the proxy for a motor.
 
 
 
