@@ -497,6 +497,43 @@ I believe I'll want a motor_driver.c module that handles the physical
 driving of GPIO pins. It will set the motor direction and duty cycle.
 I'll use LEDs as the proxy for a motor.
 
+## Back to the Motor Controller - Part 3
+
+I've abstracted the motor driver functions (init, shutdown, start, etc.)
+into the motor_driver.c module. I verified that my pipe cleaner program,
+mypwm_main.c still works as expected and it does.
+
+On first run of the PWM integration, a crash. Gemini suggests to
+set CONFIG_BOARD_LATE_INITIALIZE=y in make menuconfig...
+
+CONFIG_BOARD_LATE_INITIALIZE=y did not work. I ended up doing this:
+/* Main App Initialization */
+if (board_app_initialize(0) < 0) {
+    return -1;
+}   
+which seemed to work.
+
+I also implemented realtime control of speed, duration, etc. by
+adding messages between the TUI and motorcontroller.c:run_cleaning_cycle.
+
+I will abandon the ramp_time parameter and fix the motor ramp up time (
+the time it takes for the duty cycle to reach its programmed value or the
+time it takes to get to 0) to a permanent value of approximately 1 second.
+Each iteration through the run_cleaning_cycle "keep_running" while loop is about
+10ms, so I set the MC_RAMP_STEP to 1. This will give enough iteration to ramp 
+the duty cycle to its final value in about 1 second. The entire "keep_running"
+loop should take at least a second if the timedreceive call were actually blocking
+until the next_time time. I don't quite understand how the loop could execute in 10ms.
+
+I increased the stack size of the textui task to 16K. There are large stack
+variables in the status and prompt panes that hold the display frame. The
+stack was overflowing in some cases, causing a crash. 
+
+Things are now working as expected. The next steps will be to add
+profiles (to the a flash memory filesystem), and start implementing 
+the LVGL GUI (while removing the text GUI).
+
+
 
 
 

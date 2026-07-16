@@ -14,6 +14,13 @@
 #define STATUS_WIDTH 30 
 #define PROMPT "mc> "
 
+
+extern int g_ramp_time;
+extern int g_speed;
+extern int g_duty;
+extern int g_duration;
+extern int g_agitate_duration;
+
 static int FD;
 
 static struct clean_cmd_msg_s g_cmd_msg;
@@ -22,11 +29,6 @@ static mqd_t tel_q;
 
 static int ui_dirty_top = 1;
 static int ui_dirty_bottom = 1;
-
-extern int g_ramp_time;
-extern int g_speed;
-extern int g_duration;
-extern int g_agitate_duration;
 
 static char *g_motor_messages[] = {
     "Ready",
@@ -150,7 +152,7 @@ static void draw_prompt_status_pane(struct ui_ctx *ctx, const struct input_ctx *
     int prompt_row = content_rows + 1;       // second-to-last row
     int status_row = content_rows + 2;      // last row
 
-    char frame[4096];
+    char frame[4096]; 
     size_t off = 0;
     size_t cap = sizeof(frame);
 
@@ -236,6 +238,9 @@ static void handle_command(struct ui_ctx *ctx, char *cmd)
         char *arg = strtok(NULL, " ");
         if (arg) {
             g_duration = atoi(arg);
+            g_cmd_msg.command = MSG_SET_DURATION;
+            g_cmd_msg.run_time_s = g_duration;
+            mq_send(cmd_q, (const char *)&g_cmd_msg, sizeof(g_cmd_msg), 0);
         } else {
             append_line(ctx, "Usage: duration <seconds>");
             snprintf(ctx->str_status, sizeof(ctx->str_status), "Missing argument");
@@ -244,6 +249,11 @@ static void handle_command(struct ui_ctx *ctx, char *cmd)
         char *arg = strtok(NULL, " ");
         if (arg) {
             g_speed = atoi(arg);
+            g_speed = (g_speed < 0) ? 0 : g_speed;
+            g_speed = (g_speed > MOTOR_MAX_SPEED) ? MOTOR_MAX_SPEED : g_speed;
+            g_cmd_msg.command = MSG_SET_SPEED;
+            g_cmd_msg.max_duty = ((g_speed * MOTOR_MAX_DUTY) / MOTOR_MAX_SPEED);
+            mq_send(cmd_q, (const char *)&g_cmd_msg, sizeof(g_cmd_msg), 0);
         } else {
             append_line(ctx, "Usage: speed <rpm>");
             snprintf(ctx->str_status, sizeof(ctx->str_status), "Missing argument");
@@ -252,6 +262,9 @@ static void handle_command(struct ui_ctx *ctx, char *cmd)
         char *arg = strtok(NULL, " ");
         if (arg) {
             g_ramp_time = atoi(arg);
+            g_cmd_msg.command = MSG_SET_RAMP_TIME;
+            g_cmd_msg.ramp_time_s = g_ramp_time;
+            mq_send(cmd_q, (const char *)&g_cmd_msg, sizeof(g_cmd_msg), 0);
         } else {
             append_line(ctx, "Usage: ramp_time <seconds>");
             snprintf(ctx->str_status, sizeof(ctx->str_status), "Missing argument");
@@ -260,6 +273,9 @@ static void handle_command(struct ui_ctx *ctx, char *cmd)
         char *arg = strtok(NULL, " ");
         if (arg) {
             g_agitate_duration = atoi(arg);
+            g_cmd_msg.command = MSG_SET_AGITATE_DURATION;
+            g_cmd_msg.agitate_interval_s = g_agitate_duration;
+            mq_send(cmd_q, (const char *)&g_cmd_msg, sizeof(g_cmd_msg), 0);
         } else {
             append_line(ctx, "Usage: agitate_duration <seconds>");
             snprintf(ctx->str_status, sizeof(ctx->str_status), "Missing argument");
@@ -268,7 +284,10 @@ static void handle_command(struct ui_ctx *ctx, char *cmd)
         snprintf(ctx->str_status, sizeof(ctx->str_status), "Sent run command");
         g_cmd_msg.command = MSG_RUN;
         g_cmd_msg.run_time_s = g_duration;
-        g_cmd_msg.max_duty = 50;
+        g_cmd_msg.agitate_interval_s = g_agitate_duration;
+        g_duty = ((g_speed * MOTOR_MAX_DUTY) / MOTOR_MAX_SPEED);
+        //g_cmd_msg.max_duty = g_duty;
+        g_cmd_msg.max_duty = g_duty;
         mq_send(cmd_q, (const char *)&g_cmd_msg, sizeof(g_cmd_msg), 0);
     } else if (strcmp(word, "stop") == 0) {
         snprintf(ctx->str_status, sizeof(ctx->str_status), "Sent stop command");

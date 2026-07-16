@@ -37,7 +37,8 @@ extern int textui_loop(int argc, char *argv[]);
 extern int mc_task_entry(int argc, char *argv[]);
 
 int g_ramp_time=2;         /* ramp up/down time in secs */
-int g_speed=300;           /* motor speed in rpm */
+int g_speed=MOTOR_MAX_SPEED/2;          /* motor speed in rpm */
+int g_duty = ((MOTOR_MAX_SPEED/2) * MOTOR_MAX_DUTY) / MOTOR_MAX_SPEED; /* duty cycle percentage */
 int g_duration=300;        /* duration in secs to run motor */
 int g_countdown;           /* countdown in secs */
 int g_agitate_duration=10; /* duration of CW and CCW motion in secs 
@@ -76,6 +77,16 @@ int motcontrol_main(int argc, FAR char *argv[])
 {
     
 /* Main App Initialization */
+if (board_app_initialize(0) < 0) {
+    return -1;
+}    
+
+#if 1
+if (motor_driver_init() != 0) {
+    fprintf(stderr, "Error: Failed to initialize motor driver.\n");
+    return -1;
+}
+#endif
 
 /* 1. Pre-create the Command Queue (UI -> Motor) */
 static const struct mq_attr cleaner_cmd_attr = {
@@ -113,7 +124,12 @@ else
 
 /* Now it is 100% safe to launch your tasks */
 task_create("motor_task", 150, 2048, mc_task_entry, NULL);
-task_create("ui_task",    100, 2048, textui_loop,    NULL);
+task_create("ui_task",    100, 16384, textui_loop,    NULL);
+
+// Don't shutdown the PWMs, they should be active for the life of the application.
+#if 0
+motor_driver_shutdown(); /* Shutdown the motor driver hardware */
+#endif
 
 return 0;
 } 

@@ -45,14 +45,6 @@ int mc_task_entry(int argc, char *argv[])
 
 }
 
-static int set_motor_direction(int direction)
-{
-    return 0;
-}
-static int set_motor_duty(int duty)
-{
-    return 0;
-}
 
 static int handle_ui_command(struct clean_cmd_msg_s *cmd) { 
     static struct clean_tel_msg_s res_from_motor = {
@@ -87,6 +79,10 @@ static int handle_ui_command(struct clean_cmd_msg_s *cmd) {
         case MSG_STOP_REQ:
         case MSG_PAUSE:
         case MSG_ABORT:
+        case MSG_SET_DURATION:
+        case MSG_SET_SPEED:
+        case MSG_SET_RAMP_TIME:
+        case MSG_SET_AGITATE_DURATION:
             res_from_motor.state = MOTOR_MESSAGE;
             res_from_motor.message_id = MSG_MOTOR_READY; // Indicate that the motor is ready for a new command
             mq_send(tel_q, (void*)&res_from_motor, sizeof(struct clean_tel_msg_s), 0);  
@@ -132,13 +128,22 @@ static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_
 {
     struct clean_cmd_msg_s async_msg;
     uint16_t target_duty = cmd->max_duty;
+    uint16_t target_duty_saved;  
     uint16_t time_remaining = res_from_motor->time_remaining;
     uint16_t agitate_interval_s = cmd->agitate_interval_s;
     int current_duty = 0;
-    int motor_direction = 1; // 1 for forward, 0 for reverse
+    int ramp_time = cmd->ramp_time_s;
     bool keep_running = true;
+    bool reverse_motor = false;
 
     struct timespec now, next_tick, end_time, next_motor_reverse_time;
+    
+    #if 1
+    /* motor driver initialization */
+    if (motor_driver_start_pwm() != 0) {
+        return -1;
+    }
+    #endif
     
     // Next tick time
     (void)mc_get_abstime_from_now(&next_tick, MC_MS_PER_SEC); // 1 second   
@@ -172,22 +177,34 @@ static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_
                 keep_running = false; // Stop trying to run after we hit zero
             }
             if (async_msg.command == MSG_ABORT) {
-                set_motor_duty(0); // Hard stop for emergencies
+                motor_driver_set_duty(0); // Hard stop for emergencies
                 return MC_ABORTED;
+            }
+            // Handle set commands to dynamically change the cleaning cycle parameters
+            if (async_msg.command == MSG_SET_DURATION) {
+                time_remaining = async_msg.run_time_s;
+                (void)mc_get_abstime_from_now(&end_time, time_remaining * MC_MS_PER_SEC);
+            }
+            if (async_msg.command == MSG_SET_SPEED) {
+                target_duty = async_msg.max_duty;
+            }
+            if (async_msg.command == MSG_SET_RAMP_TIME) {
+                ramp_time = async_msg.ramp_time_s;
+            }
+            if (async_msg.command == MSG_SET_AGITATE_DURATION) {
+                agitate_interval_s = async_msg.agitate_interval_s;
+                (void)mc_get_abstime_from_now(&next_motor_reverse_time, agitate_interval_s * MC_MS_PER_SEC);
             }
         }
         
-#if 1
         // Send time update to UI every tick 
         if (timespec_compare(&now, &next_tick) >= 0) {
             time_remaining = end_time.tv_sec - now.tv_sec; 
             res_from_motor->time_remaining = time_remaining; 
-            //res_from_motor->state = (res_from_motor->time_remaining > 0) ? MOTOR_STATE_RUNNING : MOTOR_STATE_STOPPED;
             mq_send(tel_q, (void*)res_from_motor, sizeof(struct clean_tel_msg_s), 0);
             // Update the tick timer, now + 1 sec.
             (void)mc_get_abstime_from_now(&next_tick, MC_MS_PER_SEC);
         }
-#endif
 
         // Check if the runtime has been exceeded
         if (timespec_compare(&now, &end_time) >= 0) {
@@ -201,9 +218,9 @@ static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_
         // Check if it's time to reverse the motor
         if (timespec_compare(&now, &next_motor_reverse_time) >= 0) {
             /* It's time to reverse the motor */
-            motor_direction = !motor_direction;
-            // Set motor direction
-            set_motor_direction(motor_direction);
+            reverse_motor = true;
+            target_duty_saved = target_duty; // Save the current target duty
+            target_duty = 0; // Trigger the "Soft Landing" before reversing
             // Update the deadline for the next motor reverse
             (void)mc_get_abstime_from_now(&next_motor_reverse_time, agitate_interval_s * MC_MS_PER_SEC);
         }
@@ -216,7 +233,14 @@ static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_
             current_duty -= MC_RAMP_STEP; // This provides the soft landing
         }
 
-        set_motor_duty(current_duty);
+        motor_driver_set_duty(current_duty);
+        
+        if (reverse_motor && (current_duty <= target_duty)) {
+            motor_driver_reverse_motor_direction();
+            // Restore the target duty after the motor has stopped
+            target_duty = target_duty_saved;
+            reverse_motor = false;
+        }
 
 
     #if 0

@@ -10,8 +10,12 @@
 #define MSG_PAUSE 2
 #define MSG_ABORT 3
 #define MSG_RESUME 4
+#define MSG_SET_DURATION 5
+#define MSG_SET_SPEED 6
+#define MSG_SET_RAMP_TIME 7
+#define MSG_SET_AGITATE_DURATION 8
 
-#define MC_RAMP_STEP 10
+#define MC_RAMP_STEP 1
 #define MC_SUCCESS 0
 #define MC_ABORTED -1
 #define MC_NS_PER_MS 1000000
@@ -26,10 +30,17 @@
 // Message IDs for communication between motor controller and UI
 #define MSG_MOTOR_READY 0
 
+// Limits for motor speed and duty cycle
+#define MOTOR_MAX_SPEED 600 // Maximum speed in RPM    
+#define MOTOR_MIN_SPEED 0    // Minimum speed in RPM    
+#define MOTOR_MAX_DUTY 95   // Maximum duty cycle percentage, 95% to avoid pwm saturation 
+#define MOTOR_MIN_DUTY 0    // Minimum duty cycle percentage, 5% to avoid underdriving the motor
+
 struct clean_cmd_msg_s {
     uint8_t command;
     uint16_t run_time_s;
     uint16_t agitate_interval_s;
+    uint16_t ramp_time_s;
     uint16_t max_duty;
 };
 
@@ -42,6 +53,13 @@ struct clean_tel_msg_s {
     uint16_t current_duty;   /* Current PWM value */
 };
 
+
+/* motor_driver.c functions */
+int motor_driver_init(void);
+void motor_driver_shutdown(void);
+int motor_driver_start_pwm(void);
+void motor_driver_set_duty(int duty);
+void motor_driver_reverse_motor_direction(void);
 
 int mc_get_now(struct timespec *now);
 int mc_get_abstime_from_now(struct timespec *base, long nanoseconds);

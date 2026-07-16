@@ -31,7 +31,7 @@ MODULE    = $(CONFIG_ESP32C3_XIAO_MOTCONTROL)
 
 
 MAINSRC = motcontrol_main.c
-CSRCS += textui.c motorcontroller.c
-MODULE_OBJS = motcontrol_main.o textui.o motorcontroller.o
+CSRCS += textui.c motorcontroller.c motor_driver.c
+MODULE_OBJS = motcontrol_main.o textui.o motorcontroller.o motor_driver.o
 
 include $(APPDIR)/Application.mk

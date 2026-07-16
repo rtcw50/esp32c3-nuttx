@@ -48,3 +48,7 @@ cp defconfig boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
 
 Use nsh as the base configuration since we're running the example
 via the shell.
+
+
+
+
