@@ -12,10 +12,9 @@
 #define MSG_RESUME 4
 #define MSG_SET_DURATION 5
 #define MSG_SET_SPEED 6
-#define MSG_SET_RAMP_TIME 7
 #define MSG_SET_AGITATE_DURATION 8
 
-#define MC_RAMP_STEP 1
+#define MC_RAMP_STEP 1 // Increase value for faster ramping, decrease for slower ramping
 #define MC_SUCCESS 0
 #define MC_ABORTED -1
 #define MC_NS_PER_MS 1000000

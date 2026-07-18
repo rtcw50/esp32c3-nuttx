@@ -42,10 +42,8 @@
 /* Define GPIO ioctl macros locally to ensure availability */
 
 /* See *nuttx/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c */
-//#define BLUE_LED 0 /* index 0 -> /dev/gpio0 -> D1 */
-//#define RED_LED  1 /* index 1 -> /dev/gpio1 -> D2 */   
-#define BLUE_LED 2 /* index 0 -> /dev/gpio0 -> D3 */
-#define RED_LED  3 /* index 1 -> /dev/gpio1 -> D4 */   
+#define BLUE_LED 10 /* /dev/gpio21 */ 
+#define RED_LED  6 /* /dev/gpio6 */   
 
 #define ENABLE_RED_LED 1 
 

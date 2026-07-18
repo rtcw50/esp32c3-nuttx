@@ -81,7 +81,6 @@ static int handle_ui_command(struct clean_cmd_msg_s *cmd) {
         case MSG_ABORT:
         case MSG_SET_DURATION:
         case MSG_SET_SPEED:
-        case MSG_SET_RAMP_TIME:
         case MSG_SET_AGITATE_DURATION:
             res_from_motor.state = MOTOR_MESSAGE;
             res_from_motor.message_id = MSG_MOTOR_READY; // Indicate that the motor is ready for a new command
@@ -132,7 +131,6 @@ static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_
     uint16_t time_remaining = res_from_motor->time_remaining;
     uint16_t agitate_interval_s = cmd->agitate_interval_s;
     int current_duty = 0;
-    int ramp_time = cmd->ramp_time_s;
     bool keep_running = true;
     bool reverse_motor = false;
 
@@ -187,9 +185,6 @@ static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_
             }
             if (async_msg.command == MSG_SET_SPEED) {
                 target_duty = async_msg.max_duty;
-            }
-            if (async_msg.command == MSG_SET_RAMP_TIME) {
-                ramp_time = async_msg.ramp_time_s;
             }
             if (async_msg.command == MSG_SET_AGITATE_DURATION) {
                 agitate_interval_s = async_msg.agitate_interval_s;

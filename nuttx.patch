@@ -200,7 +200,7 @@ index ccbe39afe7..06aea00e33 100644
  CONFIG_SCHED_BACKTRACE=y
  CONFIG_SCHED_WAITPID=y
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
-index 4ffe981e72..b19d59fe94 100644
+index 4ffe981e72..c55a7e65b4 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
 @@ -27,10 +27,11 @@
@@ -212,8 +212,8 @@ index 4ffe981e72..b19d59fe94 100644
  
 -#define BOARD_NGPIOOUT    1 /* Amount of GPIO Output pins */
 -#define BOARD_NGPIOINT    1 /* Amount of GPIO Input w/ Interruption pins */
-+#define BOARD_NGPIOOUT    10 /* Amount of GPIO Output pins */
-+#define BOARD_NGPIOINT    1   /* Amount of GPIO Input w/ Interruption pins */
++#define BOARD_NGPIOOUT    11 /* Amount of GPIO Output pins */
++#define BOARD_NGPIOINT    0   /* Amount of GPIO Input w/ Interruption pins */
  
  #endif /* __BOARDS_RISCV_ESP32C3_ESP32C3_XIAO_INCLUDE_BOARD_H */
  
@@ -230,14 +230,14 @@ index 6113c90337..3fd3509f5f 100644
  #endif
  }
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
-index 78fe996097..dccd1e7b77 100644
+index 78fe996097..30dbf7d5db 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
-@@ -64,6 +64,30 @@
+@@ -64,6 +64,31 @@
  
  #define GPIO_OUT1  3
  
-+/* GPIO2 is reserved as an IRQ PIN, do not use it for IO */
++#define GPIO2 2
 +#define GPIO3 3
 +#define GPIO4 4
 +#define GPIO5 5
@@ -249,6 +249,7 @@ index 78fe996097..dccd1e7b77 100644
 +#define GPIO9 9
 +#define GPIO10 10
 +/* We refer to pins by their Dx names in Arduino, so do it here */
++#define D0 GPIO2
 +#define D1 GPIO3
 +#define D2 GPIO4
 +#define D3 GPIO5
@@ -264,7 +265,7 @@ index 78fe996097..dccd1e7b77 100644
  #if !defined(CONFIG_ESPRESSIF_GPIO_IRQ) && BOARD_NGPIOINT > 0
  #  error "NGPIOINT is > 0 and GPIO interrupts aren't enabled"
  #endif
-@@ -73,6 +97,7 @@
+@@ -73,6 +98,7 @@
   */
  
  #define GPIO_IRQPIN  2
@@ -272,13 +273,13 @@ index 78fe996097..dccd1e7b77 100644
  
  /****************************************************************************
   * Private Types
-@@ -128,7 +153,17 @@ static const struct gpio_operations_s gpout_ops =
+@@ -128,7 +154,33 @@ static const struct gpio_operations_s gpout_ops =
  
  static const uint32_t g_gpiooutputs[BOARD_NGPIOOUT] =
  {
 -  GPIO_OUT1
-+/*  GPIO_OUT1 */
-+D1, /* /dev/gpio0 */
++D0,
++D1, 
 +D2,
 +D3,
 +D4,
@@ -287,10 +288,35 @@ index 78fe996097..dccd1e7b77 100644
 +D7,
 +D8,
 +D9,
-+D10   /* /dev/gpio9 */ 
++D10 
++};
++
++/* This maps the Xiao GPIO pin names to their corresponding device names */
++static const uint32_t g_gpio_dev_name_map[BOARD_NGPIOOUT] =
++{
++  GPIO2,  /* /dev/gpio2 */
++  GPIO3,  /* /dev/gpio3 */
++  GPIO4,  /* /dev/gpio4 */
++  GPIO5,  /* /dev/gpio5 */
++  GPIO6,  /* /dev/gpio6 */
++  GPIO7,  /* /dev/gpio7 */
++  GPIO21, /* /dev/gpio21 */
++  GPIO20, /* /dev/gpio20 */
++  GPIO8,  /* /dev/gpio8 */
++  GPIO9,  /* /dev/gpio9 */
++  GPIO10  /* /dev/gpio10 */
  };
  
  static struct espgpio_dev_s g_gpout[BOARD_NGPIOOUT];
+@@ -481,7 +533,7 @@ int esp_gpio_init(void)
+       g_gpout[i].gpio.gp_pintype = GPIO_OUTPUT_PIN;
+       g_gpout[i].gpio.gp_ops     = &gpout_ops;
+       g_gpout[i].id              = i;
+-      gpio_pin_register(&g_gpout[i].gpio, pincount);
++      gpio_pin_register(&g_gpout[i].gpio, g_gpio_dev_name_map[pincount]);
+ 
+       /* Configure the pins that will be used as output */
+ 
 diff --git a/tools/Config.mk b/tools/Config.mk
 index 59516caf5b..bd9b573c46 100644
 --- a/tools/Config.mk

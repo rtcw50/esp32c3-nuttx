@@ -12,8 +12,6 @@ extern fn int system_GPIOC_SETPINTYPE();
 extern fn int system_GPIOC_WRITE();
 extern fn int system_GPIOC_READ();
 
-const int BLUE_LED = 2; // index 0 of /dev/gpio0 -> D3
-const int RED_LED = 3;
 
 faultdef OPEN_ERROR;
 
@@ -27,12 +25,12 @@ fn int? c3open(ZString path)  {
 
 fn int blinkc3_main() @export("blinkc3_main") {
    io::printn("blinkc3 program");
-   int? fd = c3open("/dev/gpio0");
+   int? fd = c3open("/dev/gpio5");
    if (catch excuse = fd) { 
-      io::printn("failed to open /dev/gpio0");
+      io::printn("failed to open /dev/gpio5");
       return -1;
    }
-   io::printn("opened /dev/gpio0");
+   io::printn("opened /dev/gpio5");
    defer {
       // close the file descriptor
       close(fd);

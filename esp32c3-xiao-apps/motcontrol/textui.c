@@ -15,7 +15,6 @@
 #define PROMPT "mc> "
 
 
-extern int g_ramp_time;
 extern int g_speed;
 extern int g_duty;
 extern int g_duration;
@@ -225,7 +224,6 @@ static void handle_command(struct ui_ctx *ctx, char *cmd)
         append_line(ctx, "  help                       Show this help");
         append_line(ctx, "  duration <secs>            Set total run time in seconds");
         append_line(ctx, "  speed <rpm>                Set speed in RPM");
-        append_line(ctx, "  ramp_time <secs>           Set ramp up/down time in seconds");
         append_line(ctx, "  agitate_duration <secs>    Set agitation time in seconds");
         append_line(ctx, "  run                        Run the motor");
         append_line(ctx, "  stop                       Stop the motor");
@@ -256,17 +254,6 @@ static void handle_command(struct ui_ctx *ctx, char *cmd)
             mq_send(cmd_q, (const char *)&g_cmd_msg, sizeof(g_cmd_msg), 0);
         } else {
             append_line(ctx, "Usage: speed <rpm>");
-            snprintf(ctx->str_status, sizeof(ctx->str_status), "Missing argument");
-        }
-    } else if (strcmp(word, "ramp_time") == 0) {
-        char *arg = strtok(NULL, " ");
-        if (arg) {
-            g_ramp_time = atoi(arg);
-            g_cmd_msg.command = MSG_SET_RAMP_TIME;
-            g_cmd_msg.ramp_time_s = g_ramp_time;
-            mq_send(cmd_q, (const char *)&g_cmd_msg, sizeof(g_cmd_msg), 0);
-        } else {
-            append_line(ctx, "Usage: ramp_time <seconds>");
             snprintf(ctx->str_status, sizeof(ctx->str_status), "Missing argument");
         }
     } else if (strcmp(word, "agitate_duration") == 0) {
@@ -308,8 +295,6 @@ static void handle_command(struct ui_ctx *ctx, char *cmd)
         snprintf(buf, sizeof(buf), " duration=%ds", g_duration);
         append_line(ctx, buf);
         snprintf(buf, sizeof(buf), " speed=%drpm", g_speed);
-        append_line(ctx, buf);
-        snprintf(buf, sizeof(buf), " ramp_time=%ds", g_ramp_time);
         append_line(ctx, buf);
         snprintf(buf, sizeof(buf), " agitate_duration=%ds", g_agitate_duration);
         append_line(ctx, buf);

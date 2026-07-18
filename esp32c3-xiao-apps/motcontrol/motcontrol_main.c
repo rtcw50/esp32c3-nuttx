@@ -36,7 +36,6 @@
 extern int textui_loop(int argc, char *argv[]);
 extern int mc_task_entry(int argc, char *argv[]);
 
-int g_ramp_time=2;         /* ramp up/down time in secs */
 int g_speed=MOTOR_MAX_SPEED/2;          /* motor speed in rpm */
 int g_duty = ((MOTOR_MAX_SPEED/2) * MOTOR_MAX_DUTY) / MOTOR_MAX_SPEED; /* duty cycle percentage */
 int g_duration=300;        /* duration in secs to run motor */
