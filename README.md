@@ -533,6 +533,48 @@ Things are now working as expected. The next steps will be to add
 profiles (to the a flash memory filesystem), and start implementing 
 the LVGL GUI (while removing the text GUI).
 
+## LVGL
+
+I spent about 2 weeks on trying to LVGL to work with the framebuffer
+driver (/dev/fb0) and SPI2. Lots of memory issues and other issues.
+Although I ultimately was able to get a functional /dev/fb0 to work
+with SPI2, LVGL could never display a simple label on the screen. 
+I was able to send commands to the display, but running down the 
+render pipeline of LVGL, I encounted some memory corruption issues
+I was never able to resolve. I pivoted to TFT_eSPI (which works 
+on Arduino) and is available in nuttx. Here's the dump I was
+seeing:
+ylvgl: board initialized
+mylvgl: display wrapper initialized successfully
+mylvgl: Enter main loop...
+riscv_exception: EXCEPTION: Load access fault. MCAUSE: 00000005, EPC: 4207b044, MTVAL: f7bef7be
+riscv_exception: PANIC!!! Exception = 00000005
+dump_assert_info: Current Version: NuttX  12.13.0 46d2b59666-dirty Aug  2 2026 15:48:46 risc-v
+dump_assert_info: Assertion failed panic: at file: :0 task: mylvgl_main process: mylvgl_main 0x4206f5f4
+up_dump_register: EPC: 4207b044
+up_dump_register: A0: f7bef7be A1: 00000000 A2: 00000000 A3: 00000021
+up_dump_register: A4: f7bef7be A5: f7bef7be A6: 000001e0 A7: 00000010
+up_dump_register: T0: 42090a54 T1: 0000000f T2: 00000000 T3: 80000000
+up_dump_register: T4: 00000008 T5: 00000000 T6: 00000000
+up_dump_register: S0: f7bef7be S1: 3fc89984 S2: f7bef7be S3: 00000000
+up_dump_register: S4: 00000000 S5: ffff7fff S6: 00000140 S7: 3c0c1ec4
+up_dump_register: S8: 0000013f S9: 0000013f S10: 00000002 S11: 00000001
+up_dump_register: SP: 3fc89940 FP: f7bef7be TP: 00000000 RA: 4207b024
+dump_stackinfo: User Stack:
+dump_stackinfo:   base: 0x3fc894f8
+dump_stackinfo:   size: 00001976
+
+dump_stackinfo:     sp: 0x3fc89940
+
+The problem was an event list seemed to be corrupted in the 
+lv_draw_sw_blend_color_to_rgb565 DEST32 loop (24th iteration).
+
+Maybe I'll come back if I can built a self-hosted coding LLM
+to help me debug it.
+
+Gave up for now.
+
+
 
 
 
