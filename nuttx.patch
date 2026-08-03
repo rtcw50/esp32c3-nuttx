@@ -57,6 +57,19 @@ index 084bb32758..0978cff48a 100644
  # Shared library build flags
  
  SHCCFLAGS = -fPIC -fPIE -fvisibility=default
+diff --git a/arch/risc-v/src/common/espressif/esp_spi.c b/arch/risc-v/src/common/espressif/esp_spi.c
+index 114e67a57d..daa3afba25 100644
+--- a/arch/risc-v/src/common/espressif/esp_spi.c
++++ b/arch/risc-v/src/common/espressif/esp_spi.c
+@@ -134,7 +134,7 @@
+ 
+ /* SPI default frequency (limited by clock divider) */
+ 
+-#define SPI_DEFAULT_FREQ  (4000000)
++#define SPI_DEFAULT_FREQ  (1000000)
+ 
+ /* SPI default width */
+ 
 diff --git a/arch/risc-v/src/common/espressif/esp_usbserial.c b/arch/risc-v/src/common/espressif/esp_usbserial.c
 index 90aa161913..2265843d54 100644
 --- a/arch/risc-v/src/common/espressif/esp_usbserial.c
@@ -200,10 +213,10 @@ index ccbe39afe7..06aea00e33 100644
  CONFIG_SCHED_BACKTRACE=y
  CONFIG_SCHED_WAITPID=y
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
-index 4ffe981e72..c55a7e65b4 100644
+index 4ffe981e72..d3ca99ad36 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
-@@ -27,10 +27,11 @@
+@@ -27,10 +27,15 @@
   * Pre-processor Definitions
   ****************************************************************************/
  
@@ -214,9 +227,41 @@ index 4ffe981e72..c55a7e65b4 100644
 -#define BOARD_NGPIOINT    1 /* Amount of GPIO Input w/ Interruption pins */
 +#define BOARD_NGPIOOUT    11 /* Amount of GPIO Output pins */
 +#define BOARD_NGPIOINT    0   /* Amount of GPIO Input w/ Interruption pins */
++
++#define GPIO_LCD_RST       4  /* GPIO4 - LCD Reset */
++#define GPIO_LCD_DC        3  /* GPIO3 - LCD Data/Command */
++#define GPIO_LCD_LED       20  /* GPIO20 - LCD Backlight */
  
  #endif /* __BOARDS_RISCV_ESP32C3_ESP32C3_XIAO_INCLUDE_BOARD_H */
  
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs b/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs
+index 37deb0146b..7f49cffd5e 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs
+@@ -36,6 +36,10 @@ ifeq ($(CONFIG_DEV_GPIO),y)
+   CSRCS += esp32c3_gpio.c
+ endif
+ 
++ifeq ($(CONFIG_LCD_ILI9341),y)
++  CSRCS += esp32c3_lcd.c esp32c3_xiao_spi.c
++endif
++
+ DEPPATH += --dep-path board
+ VPATH += :board
+ CFLAGS += ${INCDIR_PREFIX}$(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src$(DELIM)board$(DELIM)board
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3-xiao.h b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3-xiao.h
+index 6645f64432..1316d8834b 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3-xiao.h
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3-xiao.h
+@@ -59,7 +59,7 @@
+ /****************************************************************************
+  * Public Function Prototypes
+  ****************************************************************************/
+-
++int esp32c3_xiao_lcd_initialize(void);
+ /****************************************************************************
+  * Name: esp_bringup
+  *
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_appinit.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_appinit.c
 index 6113c90337..3fd3509f5f 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_appinit.c
@@ -229,6 +274,51 @@ index 6113c90337..3fd3509f5f 100644
    return esp_bringup();
  #endif
  }
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_bringup.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_bringup.c
+index 7fbfa7a43f..6d88baa7e8 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_bringup.c
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_bringup.c
+@@ -42,6 +42,16 @@
+ #include "esp_board_bmp180.h"
+ 
+ #include "espressif/esp_start.h"
++#ifdef CONFIG_ESPPRESSIF_SPI2
++#include <nuttx/spi/spi.h>
++#endif
++#ifdef CONFIG_LCD
++#include <nuttx/lcd/lcd.h>
++#include <nuttx/board.h>
++#endif
++#ifdef CONFIG_LCD_ILI9341
++#include <nuttx/lcd/ili9341.h>
++#endif
+ 
+ #ifdef CONFIG_WATCHDOG
+ #  include "espressif/esp_wdt.h"
+@@ -143,6 +153,8 @@ int esp_bringup(void)
+ {
+   int ret = OK;
+ 
++
++
+ #ifdef CONFIG_FS_PROCFS
+   /* Mount the procfs file system */
+ 
+@@ -387,6 +399,14 @@ int esp_bringup(void)
+     }
+ #endif
+ 
++#ifdef CONFIG_LCD_ILI9341
++//  ret = board_lcd_initialize();
++  ret = esp32c3_xiao_lcd_initialize();
++  if (ret < 0)
++    {
++      syslog(LOG_ERR, "ERROR: esp32c3_xiao_lcd_initialize() failed: %d\n", ret);
++    }
++#endif
+   /* If we got here then perhaps not all initialization was successful, but
+    * at least enough succeeded to bring-up NSH with perhaps reduced
+    * capabilities.
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
 index 78fe996097..30dbf7d5db 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
@@ -384,7 +474,7 @@ index 59516caf5b..bd9b573c46 100644
  ifeq ($(CONFIG_WINDOWS_NATIVE),y)
  define CLEAN
  	$(Q) if exist *$(OBJEXT) (del /f /q *$(OBJEXT))
---- /dev/null	2026-07-15 12:05:30.985190087 -0500
+--- /dev/null	2026-07-29 16:02:16.551668679 -0500
 +++ tools/Zenc.defs	2026-04-24 19:03:53.837547984 -0500
 @@ -0,0 +1,26 @@
 +############################################################################
@@ -413,7 +503,7 @@ index 59516caf5b..bd9b573c46 100644
 +
 +ZENCFLAGS := transpile -q --hide-symbols 
 +
---- /dev/null	2026-07-15 12:05:30.985190087 -0500
+--- /dev/null	2026-07-29 16:02:16.551668679 -0500
 +++ tools/C3.defs	2026-06-01 08:17:35.641172740 -0500
 @@ -0,0 +1,48 @@
 +############################################################################
@@ -465,3 +555,258 @@ index 59516caf5b..bd9b573c46 100644
 +    riscv-none-elf-nm $1 | awk '$$2 == "w" || $$2 == "W" {printf " -u %s", $$3 } $$1 == "w" {printf " -u %s", $$2}' > $(APPDIR)$(DELIM)c3_ldflags/$(PROGNAME).ldflags 
 +endef
 \ No newline at end of file
+--- /dev/null	2026-07-29 16:02:16.551668679 -0500
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c	2026-07-29 16:10:10.294275872 -0500
+@@ -0,0 +1,207 @@
++#include <nuttx/config.h>
++#include <errno.h>
++#include <syslog.h>
++
++#include <nuttx/lcd/lcd.h>
++#include <nuttx/lcd/ili9341.h>
++#include <nuttx/spi/spi.h>
++#include <nuttx/video/fb.h>
++#include <arch/board/board.h> 
++
++#include "espressif/esp_spi.h"
++#include "esp_board_spidev.h"
++#include "espressif/esp_gpio.h"
++
++static struct lcd_dev_s *g_lcd;
++
++
++struct esp32c3_xiao_lcd_s
++{
++  struct ili9341_lcd_s ili9341;
++  struct spi_dev_s *spi;
++};
++
++static void esp32c3_xiao_lcd_select(struct ili9341_lcd_s *lcd)
++{
++  struct esp32c3_xiao_lcd_s *priv =
++    (struct esp32c3_xiao_lcd_s *)lcd;
++
++  SPI_LOCK(priv->spi, true);
++  SPI_SELECT(priv->spi, SPIDEV_DISPLAY(0), true);
++}
++
++static void esp32c3_xiao_lcd_deselect(struct ili9341_lcd_s *lcd)
++{
++  struct esp32c3_xiao_lcd_s *priv =
++    (struct esp32c3_xiao_lcd_s *)lcd;
++
++  SPI_SELECT(priv->spi, SPIDEV_DISPLAY(0), false);
++  SPI_LOCK(priv->spi, false);
++}
++
++static int esp32c3_xiao_lcd_sendcmd(struct ili9341_lcd_s *lcd,
++                                     const uint8_t cmd)
++{
++  struct esp32c3_xiao_lcd_s *priv =
++    (struct esp32c3_xiao_lcd_s *)lcd;
++
++  SPI_SETBITS(priv->spi, 8);
++  SPI_CMDDATA(priv->spi, SPIDEV_DISPLAY(0), true);
++  SPI_SEND(priv->spi, cmd);
++  SPI_CMDDATA(priv->spi, SPIDEV_DISPLAY(0), false);
++  return OK;
++}
++
++static int esp32c3_xiao_lcd_sendparam(struct ili9341_lcd_s *lcd,
++                                       const uint8_t param)
++{
++  struct esp32c3_xiao_lcd_s *priv =
++    (struct esp32c3_xiao_lcd_s *)lcd;
++
++  SPI_SETBITS(priv->spi, 8);
++  SPI_CMDDATA(priv->spi, SPIDEV_DISPLAY(0), false);
++  SPI_SEND(priv->spi, param);
++  return OK;
++}
++
++static int esp32c3_xiao_lcd_recvparam(struct ili9341_lcd_s *lcd,
++                                      uint8_t *param)
++{
++  struct esp32c3_xiao_lcd_s *priv =
++    (struct esp32c3_xiao_lcd_s *)lcd;
++
++  SPI_SETBITS(priv->spi, 8);
++  SPI_CMDDATA(priv->spi, SPIDEV_DISPLAY(0), false);
++  *param = (uint8_t)(SPI_SEND(priv->spi, 0) & 0xff);
++  return OK;
++}
++
++static int esp32c3_xiao_lcd_sendgram(struct ili9341_lcd_s *lcd,
++                                      const uint16_t *wd,
++                                      uint32_t nwords)
++{
++  struct esp32c3_xiao_lcd_s *priv =
++    (struct esp32c3_xiao_lcd_s *)lcd;
++
++  SPI_SETBITS(priv->spi, 16);
++  SPI_SNDBLOCK(priv->spi, wd, nwords);
++  return OK;
++}
++
++static int esp32c3_xiao_lcd_recvgram(struct ili9341_lcd_s *lcd,
++                                      uint16_t *wd,
++                                      uint32_t nwords)
++{
++  struct esp32c3_xiao_lcd_s *priv =
++    (struct esp32c3_xiao_lcd_s *)lcd;
++
++  SPI_SETBITS(priv->spi, 16);
++  SPI_RECVBLOCK(priv->spi, wd, nwords);
++  return OK;
++}
++
++static int esp32c3_xiao_lcd_backlight(struct ili9341_lcd_s *lcd, int level)
++{
++  return OK;
++}
++
++static int board_lcd_ioctl(FAR struct lcd_dev_s *dev, int cmd, unsigned long arg)
++{
++  switch (cmd)
++    {
++      /* Handle custom board commands here (e.g., backlight control GPIOs) */
++      default:
++        return -ENOTTY; /* Command not supported */
++    }
++}
++
++int esp32c3_xiao_lcd_initialize(void)
++{
++
++  /* Register the device node as a POSIX Framebuffer (/dev/fb0) */
++#ifndef CONFIG_VIDEO_FB
++# error "CONFIG_VIDEO_FB is not defined. Please enable it in your configuration."
++#endif
++  /* This eventually calls board_lcd_initialize() to initialize the LCD and register 
++  the device node as a POSIX Framebuffer (/dev/fb0) */
++
++  int fb_ret = fb_register(0, 0);
++  if (fb_ret < 0)
++    {
++      syslog(LOG_ERR, "ERROR: fb_register failed: %d\n", fb_ret);
++      return fb_ret;
++    }
++
++  syslog(LOG_INFO, "ILI9341: Driver registered successfully at /dev/fb0\n");
++
++  return OK;
++}
++
++int board_lcd_initialize(void)
++{
++  static struct esp32c3_xiao_lcd_s priv;
++
++  int ret;
++
++
++  priv.spi = esp_spibus_initialize(ESPRESSIF_SPI2);
++  if (!priv.spi) {
++      return -ENODEV;
++  }
++
++  priv.ili9341.select    = esp32c3_xiao_lcd_select;
++  priv.ili9341.deselect  = esp32c3_xiao_lcd_deselect;
++  priv.ili9341.sendcmd   = esp32c3_xiao_lcd_sendcmd;
++  priv.ili9341.sendparam = esp32c3_xiao_lcd_sendparam;
++  priv.ili9341.recvparam = esp32c3_xiao_lcd_recvparam;
++  priv.ili9341.sendgram  = esp32c3_xiao_lcd_sendgram;
++  priv.ili9341.recvgram  = esp32c3_xiao_lcd_recvgram;
++  priv.ili9341.backlight = esp32c3_xiao_lcd_backlight;
++
++  /* Reset the display */
++  esp_configgpio(GPIO_LCD_RST, OUTPUT | PULLUP | DRIVE_2);
++
++  /* 2. Perform a hardware reset sequence */
++  esp_gpiowrite(GPIO_LCD_RST, false); /* Pull low to reset */
++  up_mdelay(20);                              /* Wait 20ms */
++  esp_gpiowrite(GPIO_LCD_RST, true);  /* Pull high to release */
++  up_mdelay(120);
++
++  if (g_lcd == NULL) {
++    g_lcd = ili9341_initialize(&priv.ili9341, 0);
++    if (!g_lcd)
++    {
++      return -ENODEV;
++    }
++  }
++
++  /* Handle unsupported ioctl commands */
++  if (g_lcd->ioctl == NULL) {
++      g_lcd->ioctl = board_lcd_ioctl;
++  }
++
++    /* Deliver power to the display controller */
++  g_lcd->setpower(g_lcd, CONFIG_LCD_MAXPOWER);
++  return OK;
++}
++
++void board_lcd_uninitialize(void)
++{
++  if (g_lcd)
++    {
++      g_lcd->setpower(g_lcd, 0);
++      g_lcd = NULL;
++    }
++}
++
++FAR struct lcd_dev_s *board_lcd_getdev(int devno)
++{
++  if (devno == 0)
++    {
++      return g_lcd;
++    }
++  else
++    {
++      return NULL;
++    }
++} 
+--- /dev/null	2026-07-29 16:02:16.551668679 -0500
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_xiao_spi.c	2026-07-29 19:32:43.765231621 -0500
+@@ -0,0 +1,42 @@
++#include <nuttx/config.h>
++#include <nuttx/spi/spi.h>
++#include <nuttx/lcd/lcd.h>
++#include "espressif/esp_spi.h"
++#include "espressif/esp_gpio.h"
++#include <arch/board/board.h> 
++
++
++#ifndef GPIO_LCD_RST
++#  error "GPIO_LCD_RST must be defined in board.h!"
++#endif
++#ifndef GPIO_LCD_DC
++#  error "GPIO_LCD_DC must be defined in board.h!"
++#endif
++#ifndef GPIO_LCD_LED
++#  error "GPIO_LCD_LED must be defined in board.h!"
++#endif
++
++
++uint8_t esp_spi2_status(struct spi_dev_s *dev, uint32_t devid)
++{
++  return SPI_STATUS_PRESENT;
++}
++
++int esp_spi2_cmddata(struct spi_dev_s *dev, uint32_t devid, bool cmd)
++{
++  if (devid == SPIDEV_DISPLAY(0))
++    {
++      esp_gpiowrite(GPIO_LCD_DC, !cmd);
++    }
++
++  return OK;
++}   
++
++void esp_spi2_select(struct spi_dev_s *dev, uint32_t devid, bool cmd)
++{
++  if (devid == SPIDEV_DISPLAY(0))
++    {
++      esp_gpiowrite(CONFIG_ESPRESSIF_SPI2_CSPIN, !cmd);
++    }
++
++}   

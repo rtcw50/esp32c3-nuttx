@@ -12,5 +12,6 @@ source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/blinkz/K
 source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/helloc3/Kconfig"
 source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/helloz/Kconfig"
 source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/motcontrol/Kconfig"
+source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/mylvgl/Kconfig"
 source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/mypwm/Kconfig"
 endmenu # esp32c3 xiao apps
