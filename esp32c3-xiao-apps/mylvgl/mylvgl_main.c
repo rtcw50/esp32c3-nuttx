@@ -13,11 +13,14 @@ int test_raw_fb(void);
 int mylvgl_main(int argc, char *argv[])
 {
     /* 1. Board initialization */
+#define MYLVGL_STANDALONE
+#ifdef MYLVGL_STANDALONE
     if (board_app_initialize(0) < 0) {
         printf("mylvgl: board_app_initialize failed\n");
         return -1;
     }   
     printf("mylvgl: board initialized\n");
+#endif
 
 #if 0
     if (test_raw_fb() == 0) {
@@ -36,7 +39,7 @@ int mylvgl_main(int argc, char *argv[])
 
     /* Point to the device node created by NuttX driver */
     /* Use /dev/lcd0 if using the NuttX LCD subsystem, or /dev/fb0 for framebuffer */
-    dsc.fb_path = "/dev/fb0";  // Change to dsc.dev_path = "/dev/lcd0"; if using /dev/lcd0
+    dsc.fb_path = "/dev/lcd0";  // Change to dsc.dev_path = "/dev/lcd0"; if using /dev/lcd0
 
     lv_nuttx_result_t result;
     lv_nuttx_init(&dsc, &result);
@@ -68,13 +71,14 @@ int mylvgl_main(int argc, char *argv[])
         
         usleep(time_till_next * 1000);
         // To test for SPI activity
-        lv_obj_invalidate(lv_screen_active());
+        //lv_obj_invalidate(lv_screen_active());
     }
 
     return 0;
 }
 
 
+#if 0
 int test_raw_fb(void)
 {
     int fd = open("/dev/fb0", O_RDWR);
@@ -106,3 +110,4 @@ int test_raw_fb(void)
     close(fd);
     return 0;
 }
+#endif

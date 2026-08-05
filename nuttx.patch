@@ -58,7 +58,7 @@ index 084bb32758..0978cff48a 100644
  
  SHCCFLAGS = -fPIC -fPIE -fvisibility=default
 diff --git a/arch/risc-v/src/common/espressif/esp_spi.c b/arch/risc-v/src/common/espressif/esp_spi.c
-index 114e67a57d..daa3afba25 100644
+index 114e67a57d..7670fec900 100644
 --- a/arch/risc-v/src/common/espressif/esp_spi.c
 +++ b/arch/risc-v/src/common/espressif/esp_spi.c
 @@ -134,7 +134,7 @@
@@ -66,7 +66,7 @@ index 114e67a57d..daa3afba25 100644
  /* SPI default frequency (limited by clock divider) */
  
 -#define SPI_DEFAULT_FREQ  (4000000)
-+#define SPI_DEFAULT_FREQ  (1000000)
++#define SPI_DEFAULT_FREQ  (10000000)
  
  /* SPI default width */
  
@@ -235,15 +235,19 @@ index 4ffe981e72..d3ca99ad36 100644
  #endif /* __BOARDS_RISCV_ESP32C3_ESP32C3_XIAO_INCLUDE_BOARD_H */
  
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs b/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs
-index 37deb0146b..7f49cffd5e 100644
+index 37deb0146b..008fb36221 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs
-@@ -36,6 +36,10 @@ ifeq ($(CONFIG_DEV_GPIO),y)
+@@ -36,6 +36,14 @@ ifeq ($(CONFIG_DEV_GPIO),y)
    CSRCS += esp32c3_gpio.c
  endif
  
 +ifeq ($(CONFIG_LCD_ILI9341),y)
 +  CSRCS += esp32c3_lcd.c esp32c3_xiao_spi.c
++endif
++
++ifeq ($(CONFIG_INPUT_ADS7843E),y)
++  CSRCS += esp32c3_tsc.c
 +endif
 +
  DEPPATH += --dep-path board
@@ -275,7 +279,7 @@ index 6113c90337..3fd3509f5f 100644
  #endif
  }
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_bringup.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_bringup.c
-index 7fbfa7a43f..6d88baa7e8 100644
+index 7fbfa7a43f..1692985f8e 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_bringup.c
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_bringup.c
 @@ -42,6 +42,16 @@
@@ -304,21 +308,25 @@ index 7fbfa7a43f..6d88baa7e8 100644
  #ifdef CONFIG_FS_PROCFS
    /* Mount the procfs file system */
  
-@@ -387,6 +399,14 @@ int esp_bringup(void)
+@@ -387,10 +399,18 @@ int esp_bringup(void)
      }
  #endif
  
-+#ifdef CONFIG_LCD_ILI9341
-+//  ret = board_lcd_initialize();
-+  ret = esp32c3_xiao_lcd_initialize();
++#if CONFIG_LCD
++  ret = board_lcd_initialize();
 +  if (ret < 0)
 +    {
-+      syslog(LOG_ERR, "ERROR: esp32c3_xiao_lcd_initialize() failed: %d\n", ret);
++      syslog(LOG_ERR, "ERROR: board_lcd_initialize() failed: %d\n", ret);
 +    }
-+#endif
    /* If we got here then perhaps not all initialization was successful, but
     * at least enough succeeded to bring-up NSH with perhaps reduced
     * capabilities.
+    */
++#endif
++
+ 
+   return ret;
+ }
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
 index 78fe996097..30dbf7d5db 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
@@ -406,6 +414,81 @@ index 78fe996097..30dbf7d5db 100644
 +      gpio_pin_register(&g_gpout[i].gpio, g_gpio_dev_name_map[pincount]);
  
        /* Configure the pins that will be used as output */
+ 
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c
+index 941416fbda..814eeaea10 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c
+@@ -2,10 +2,12 @@
+ #include <errno.h>
+ #include <syslog.h>
+ 
++
+ #include <nuttx/lcd/lcd.h>
+ #include <nuttx/lcd/ili9341.h>
+ #include <nuttx/spi/spi.h>
+-#include <nuttx/video/fb.h>
++//#include <nuttx/video/fb.h>
++#include <nuttx/lcd/lcd_dev.h>
+ #include <arch/board/board.h> 
+ 
+ #include "espressif/esp_spi.h"
+@@ -13,7 +15,7 @@
+ #include "espressif/esp_gpio.h"
+ 
+ static struct lcd_dev_s *g_lcd;
+-
++int esp32c3_tsc_setup(struct spi_dev_s *spi, int minor);
+ 
+ struct esp32c3_xiao_lcd_s
+ {
+@@ -115,6 +117,7 @@ static int board_lcd_ioctl(FAR struct lcd_dev_s *dev, int cmd, unsigned long arg
+     }
+ }
+ 
++#if 0
+ int esp32c3_xiao_lcd_initialize(void)
+ {
+ 
+@@ -136,6 +139,7 @@ int esp32c3_xiao_lcd_initialize(void)
+ 
+   return OK;
+ }
++#endif
+ 
+ int board_lcd_initialize(void)
+ {
+@@ -149,6 +153,7 @@ int board_lcd_initialize(void)
+       return -ENODEV;
+   }
+ 
++#ifdef CONFIG_LCD_ILI9341
+   priv.ili9341.select    = esp32c3_xiao_lcd_select;
+   priv.ili9341.deselect  = esp32c3_xiao_lcd_deselect;
+   priv.ili9341.sendcmd   = esp32c3_xiao_lcd_sendcmd;
+@@ -182,6 +187,23 @@ int board_lcd_initialize(void)
+ 
+     /* Deliver power to the display controller */
+   g_lcd->setpower(g_lcd, CONFIG_LCD_MAXPOWER);
++
++  ret = lcddev_register(0);
++  if (ret < 0)
++    {
++      syslog(LOG_ERR, "ERROR: lcddev_register failed: %d\n", ret);
++      return ret;
++    }
++#endif
++
++#if CONFIG_INPUT_ADS7843E
++  ret = esp32c3_tsc_setup(priv.spi, 0);
++  if (ret < 0)
++    {
++      syslog(LOG_ERR, "ERROR: esp32c3_tsc_setup() failed: %d\n", ret);
++    }
++#endif
++
+   return OK;
+ }
  
 diff --git a/tools/Config.mk b/tools/Config.mk
 index 59516caf5b..bd9b573c46 100644
@@ -556,16 +639,18 @@ index 59516caf5b..bd9b573c46 100644
 +endef
 \ No newline at end of file
 --- /dev/null	2026-07-29 16:02:16.551668679 -0500
-+++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c	2026-07-29 16:10:10.294275872 -0500
-@@ -0,0 +1,207 @@
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c	2026-08-04 19:02:07.846793782 -0500
+@@ -0,0 +1,229 @@
 +#include <nuttx/config.h>
 +#include <errno.h>
 +#include <syslog.h>
 +
++
 +#include <nuttx/lcd/lcd.h>
 +#include <nuttx/lcd/ili9341.h>
 +#include <nuttx/spi/spi.h>
-+#include <nuttx/video/fb.h>
++//#include <nuttx/video/fb.h>
++#include <nuttx/lcd/lcd_dev.h>
 +#include <arch/board/board.h> 
 +
 +#include "espressif/esp_spi.h"
@@ -573,7 +658,7 @@ index 59516caf5b..bd9b573c46 100644
 +#include "espressif/esp_gpio.h"
 +
 +static struct lcd_dev_s *g_lcd;
-+
++int esp32c3_tsc_setup(struct spi_dev_s *spi, int minor);
 +
 +struct esp32c3_xiao_lcd_s
 +{
@@ -675,6 +760,7 @@ index 59516caf5b..bd9b573c46 100644
 +    }
 +}
 +
++#if 0
 +int esp32c3_xiao_lcd_initialize(void)
 +{
 +
@@ -696,6 +782,7 @@ index 59516caf5b..bd9b573c46 100644
 +
 +  return OK;
 +}
++#endif
 +
 +int board_lcd_initialize(void)
 +{
@@ -709,6 +796,7 @@ index 59516caf5b..bd9b573c46 100644
 +      return -ENODEV;
 +  }
 +
++#ifdef CONFIG_LCD_ILI9341
 +  priv.ili9341.select    = esp32c3_xiao_lcd_select;
 +  priv.ili9341.deselect  = esp32c3_xiao_lcd_deselect;
 +  priv.ili9341.sendcmd   = esp32c3_xiao_lcd_sendcmd;
@@ -742,6 +830,23 @@ index 59516caf5b..bd9b573c46 100644
 +
 +    /* Deliver power to the display controller */
 +  g_lcd->setpower(g_lcd, CONFIG_LCD_MAXPOWER);
++
++  ret = lcddev_register(0);
++  if (ret < 0)
++    {
++      syslog(LOG_ERR, "ERROR: lcddev_register failed: %d\n", ret);
++      return ret;
++    }
++#endif
++
++#if CONFIG_INPUT_ADS7843E
++  ret = esp32c3_tsc_setup(priv.spi, 0);
++  if (ret < 0)
++    {
++      syslog(LOG_ERR, "ERROR: esp32c3_tsc_setup() failed: %d\n", ret);
++    }
++#endif
++
 +  return OK;
 +}
 +
@@ -810,3 +915,130 @@ index 59516caf5b..bd9b573c46 100644
 +    }
 +
 +}   
+--- /dev/null	2026-07-29 16:02:16.551668679 -0500
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-08-04 21:47:26.506395813 -0500
+@@ -0,0 +1,123 @@
++/****************************************************************************
++ * boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c
++ *
++ * ADS7843E / XPT2046 glue for ESP32C3-XIAO (no T_IRQ usage — polling mode)
++ ****************************************************************************/
++
++#include <nuttx/config.h>
++#include <stdint.h>
++#include <stdbool.h>
++#include <syslog.h>
++#include <errno.h>
++
++#include <nuttx/spi/spi.h>
++#include <nuttx/irq.h>
++#include <nuttx/input/ads7843e.h>
++
++#include "espressif/esp_spi.h"
++#include "espressif/esp_gpio.h"
++
++#include "esp32c3-xiao.h"
++
++/* Hardware wiring (from your message):
++ *  T_CS  -> GPIO20
++ *  T_DIN -> GPIO10 (MOSI)
++ *  T_DOUT-> GPIO6  (MISO)
++ *  T_CLK -> GPIO8  (SCK)
++ *  T_IRQ -> OPEN (not used)
++ *
++ * Note: SPI CS mapping is controlled by CONFIG_ESPRESSIF_SPI2_CSPIN or
++ *       by software CS (CONFIG_ESPRESSIF_SPI_SWCS). Ensure the build
++ *       config maps the SPI CS to GPIO20 or enable SWCS and control CS
++ *       from software if needed.
++ */
++
++/* If you want to centralize pin defines, move/adjust these in board headers. */
++#define TSC_CS_GPIO     20  /* GPIO20 (T_CS) - ensure SPI CS mapping or SWCS uses this */
++
++/* Forward declarations for callbacks required by ads7843e driver */
++static int  tsc_attach(struct ads7843e_config_s *state, xcpt_t isr);
++static void tsc_enable(struct ads7843e_config_s *state, bool enable);
++static void tsc_clear(struct ads7843e_config_s *state);
++static bool tsc_busy(struct ads7843e_config_s *state);
++static bool tsc_pendown(struct ads7843e_config_s *state);
++
++/* ads7843e configuration structure passed to the driver */
++static struct ads7843e_config_s g_tscinfo =
++{
++  .frequency = CONFIG_ADS7843E_FREQUENCY,
++  .attach    = tsc_attach,
++  .enable    = tsc_enable,
++  .clear     = tsc_clear,
++  .busy      = tsc_busy,
++  .pendown   = tsc_pendown,
++};
++
++/* Callbacks ---------------------------------------------------------------*/
++
++/* No IRQ usage: attach is a no-op */
++static int tsc_attach(struct ads7843e_config_s *state, xcpt_t isr)
++{
++  return OK;
++}
++
++/* enable/disable IRQ: no-op since we do not configure an interrupt */
++static void tsc_enable(struct ads7843e_config_s *state, bool enable)
++{
++  (void)state;
++  (void)enable;
++}
++
++/* clear pending IRQ: no-op */
++static void tsc_clear(struct ads7843e_config_s *state)
++{
++  (void)state;
++}
++
++/* BUSY pin not used in this wiring */
++static bool tsc_busy(struct ads7843e_config_s *state)
++{
++  (void)state;
++  return false;
++}
++
++/* PENIRQ not used per user requirement.
++ * Return 'true' to force polling by the driver's worker (no IRQ).
++ * Note: this will make the driver sample when it expects pen down;
++ *       tune thresholds or modify pendown() later if you add a pen detect pin.
++ */
++static bool tsc_pendown(struct ads7843e_config_s *state)
++{
++  (void)state;
++  return true;
++}
++
++/* Public setup function called from board bringup */
++int esp32c3_tsc_setup(struct spi_dev_s *spi, int minor)
++{
++  int ret;
++
++  /* Optionally configure the T_CS GPIO here if you're using software CS.
++   * If hardware CS mapping is used (CONFIG_ESPRESSIF_SPI2_CSPIN == TSC_CS_GPIO)
++   * the SPI driver will handle CS. If you use SWCS, ensure CONFIG_ESPRESSIF_SPI_SWCS
++   * is enabled and configure the GPIO accordingly.
++   */
++
++#ifdef CONFIG_ESPRESSIF_SPI_SWCS
++  esp_configgpio(TSC_CS_GPIO, OUTPUT | PULLUP | DRIVE_2);
++  esp_gpiowrite(TSC_CS_GPIO, true);
++#endif
++
++  /* Register the ADS7843E driver (this schedules the driver's worker).
++   * The driver will use the provided callbacks (which are no-ops or polling).
++   */
++  ret = ads7843e_register(spi, &g_tscinfo, minor);
++  if (ret < 0)
++    {
++      syslog(LOG_ERR, "TSC: ads7843e_register failed: %d\n", ret);
++      return ret;
++    }
++
++  syslog(LOG_INFO, "TSC: XPT2046/ADS7843E registered as /dev/input%d\n", minor);
++  return OK;
++}
+\ No newline at end of file

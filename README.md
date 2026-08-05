@@ -574,6 +574,24 @@ to help me debug it.
 
 Gave up for now.
 
+## LVGL Part 2.
+
+Working now with simple display label application (mylvgl app). I 
+convert to /dev/lcd0 driver and eliminated the /dev/fb0 overhead.
+Label displays properly. Now working on the touchscreen functionality
+using /dev/input0 and the ads7843e driver (equivalent to the xpt2046
+touch controller on my board). Add esp32c3_tsc.c to initialize the 
+driver. Currently failing:
+
+TSC: ads7843e_register failed: -22
+ERROR: esp32c3_tsc_setup() failed: -22
+mylvgl: board initialized
+mylvgl: display wrapper initialized successfully
+mylvgl: Enter main loop...
+
+but the label display is still working. 
+
+
 
 
 
