@@ -8,8 +8,34 @@
 #include <sys/ioctl.h>
 #include <nuttx/video/fb.h>
 
-int test_raw_fb(void);
+bool esp32c3_xiao_tsc_get_xy(int *x, int *y);
 
+/* Local wrapper callback that satisfies LVGL structure requirements */
+static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data)
+{
+    int x = 0;
+    int y = 0;
+
+    if (esp32c3_xiao_tsc_get_xy(&x, &y)) {
+        data->point.x = x;
+        data->point.y = y;
+        data->state = LV_INDEV_STATE_PRESSED;
+        printf("X: %d Y: %d\n", x, y);
+    } else {
+        data->state = LV_INDEV_STATE_RELEASED;
+    }
+}
+void touchscreen_init()
+{
+   // Register the input device in user space
+    lv_indev_t *indev = lv_indev_create();
+    
+    // Configure type (e.g., POINTER for touch/mouse, BUTTON for keypads)
+    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+    
+    // Attach the local translation callback
+    lv_indev_set_read_cb(indev, local_lvgl_indev_cb);
+}
 int mylvgl_main(int argc, char *argv[])
 {
     /* 1. Board initialization */
@@ -22,12 +48,6 @@ int mylvgl_main(int argc, char *argv[])
     printf("mylvgl: board initialized\n");
 #endif
 
-#if 0
-    if (test_raw_fb() == 0) {
-        printf("mylvgl:test_raw_fb - Test passed\n");
-        return 0;
-    }
-#endif
 
     
     /* 2. Initialize LVGL core */
@@ -48,6 +68,9 @@ int mylvgl_main(int argc, char *argv[])
         return -1;
     }
     printf("mylvgl: display wrapper initialized successfully\n");
+
+    touchscreen_init();
+
 
     /* 4. Build UI on the active screen created by lv_nuttx_init */
     lv_obj_t *scr = lv_screen_active(); // or lv_scr_act()
@@ -76,38 +99,3 @@ int mylvgl_main(int argc, char *argv[])
 
     return 0;
 }
-
-
-#if 0
-int test_raw_fb(void)
-{
-    int fd = open("/dev/fb0", O_RDWR);
-    if (fd < 0) {
-        printf("Failed to open /dev/fb0\n");
-        return -1;
-    }
-
-    struct fb_videoinfo_s vinfo;
-    struct fb_planeinfo_s pinfo;
-
-    /* Get info */
-    ioctl(fd, FBIOGET_VIDEOINFO, &vinfo);
-    ioctl(fd, FBIOGET_PLANEINFO, &pinfo);
-
-    printf("FB Res: %dx%d, BPP: %d, MemSize: %zu\n", 
-            vinfo.xres, vinfo.yres, pinfo.bpp, pinfo.fblen);
-
-    /* Fill framebuffer memory with white (0xFFFF for 16-bit RGB565) */
-    memset(pinfo.fbmem, 0xFF, pinfo.fblen);
-
-    /* Trigger flush if update area ioctl is supported */
-    struct fb_area_s area = {
-        .x = 0, .y = 0,
-        .w = vinfo.xres, .h = vinfo.yres
-    };
-    ioctl(fd, FBIO_UPDATE, &area);
-
-    close(fd);
-    return 0;
-}
-#endif

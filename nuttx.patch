@@ -213,10 +213,10 @@ index ccbe39afe7..06aea00e33 100644
  CONFIG_SCHED_BACKTRACE=y
  CONFIG_SCHED_WAITPID=y
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
-index 4ffe981e72..d3ca99ad36 100644
+index 4ffe981e72..ca712c0577 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
-@@ -27,10 +27,15 @@
+@@ -27,10 +27,16 @@
   * Pre-processor Definitions
   ****************************************************************************/
  
@@ -227,28 +227,27 @@ index 4ffe981e72..d3ca99ad36 100644
 -#define BOARD_NGPIOINT    1 /* Amount of GPIO Input w/ Interruption pins */
 +#define BOARD_NGPIOOUT    11 /* Amount of GPIO Output pins */
 +#define BOARD_NGPIOINT    0   /* Amount of GPIO Input w/ Interruption pins */
-+
+ 
 +#define GPIO_LCD_RST       4  /* GPIO4 - LCD Reset */
 +#define GPIO_LCD_DC        3  /* GPIO3 - LCD Data/Command */
-+#define GPIO_LCD_LED       20  /* GPIO20 - LCD Backlight */
- 
++
++#define TSC_IRQ_GPIO     6   /* GPIO6 (T_IRQ) */
++#define TSC_CS_GPIO     20  /* GPIO20 (T_CS) - ensure SPI CS mapping or SWCS uses this */
  #endif /* __BOARDS_RISCV_ESP32C3_ESP32C3_XIAO_INCLUDE_BOARD_H */
  
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs b/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs
-index 37deb0146b..008fb36221 100644
+index 37deb0146b..55e261ebca 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/Make.defs
-@@ -36,6 +36,14 @@ ifeq ($(CONFIG_DEV_GPIO),y)
+@@ -36,6 +36,12 @@ ifeq ($(CONFIG_DEV_GPIO),y)
    CSRCS += esp32c3_gpio.c
  endif
  
++# Also means the xpt2046 subsystem on the ILI9341 display
 +ifeq ($(CONFIG_LCD_ILI9341),y)
-+  CSRCS += esp32c3_lcd.c esp32c3_xiao_spi.c
++  CSRCS += esp32c3_lcd.c esp32c3_xiao_spi.c esp32c3_tsc.c
 +endif
 +
-+ifeq ($(CONFIG_INPUT_ADS7843E),y)
-+  CSRCS += esp32c3_tsc.c
-+endif
 +
  DEPPATH += --dep-path board
  VPATH += :board
@@ -416,7 +415,7 @@ index 78fe996097..30dbf7d5db 100644
        /* Configure the pins that will be used as output */
  
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c
-index 941416fbda..814eeaea10 100644
+index 941416fbda..d6650cc820 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c
 @@ -2,10 +2,12 @@
@@ -466,7 +465,7 @@ index 941416fbda..814eeaea10 100644
    priv.ili9341.select    = esp32c3_xiao_lcd_select;
    priv.ili9341.deselect  = esp32c3_xiao_lcd_deselect;
    priv.ili9341.sendcmd   = esp32c3_xiao_lcd_sendcmd;
-@@ -182,6 +187,23 @@ int board_lcd_initialize(void)
+@@ -182,6 +187,21 @@ int board_lcd_initialize(void)
  
      /* Deliver power to the display controller */
    g_lcd->setpower(g_lcd, CONFIG_LCD_MAXPOWER);
@@ -479,17 +478,43 @@ index 941416fbda..814eeaea10 100644
 +    }
 +#endif
 +
-+#if CONFIG_INPUT_ADS7843E
 +  ret = esp32c3_tsc_setup(priv.spi, 0);
 +  if (ret < 0)
 +    {
 +      syslog(LOG_ERR, "ERROR: esp32c3_tsc_setup() failed: %d\n", ret);
 +    }
-+#endif
 +
    return OK;
  }
  
+diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_xiao_spi.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_xiao_spi.c
+index 01f08e48d1..1c852345c4 100644
+--- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_xiao_spi.c
++++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_xiao_spi.c
+@@ -12,9 +12,6 @@
+ #ifndef GPIO_LCD_DC
+ #  error "GPIO_LCD_DC must be defined in board.h!"
+ #endif
+-#ifndef GPIO_LCD_LED
+-#  error "GPIO_LCD_LED must be defined in board.h!"
+-#endif
+ 
+ 
+ uint8_t esp_spi2_status(struct spi_dev_s *dev, uint32_t devid)
+@@ -38,5 +35,13 @@ void esp_spi2_select(struct spi_dev_s *dev, uint32_t devid, bool cmd)
+     {
+       esp_gpiowrite(CONFIG_ESPRESSIF_SPI2_CSPIN, !cmd);
+     }
++  else if (devid == SPIDEV_TOUCHSCREEN(0))
++    {
++      esp_gpiowrite(TSC_CS_GPIO, !cmd);
++    }
++  else 
++    {
++      syslog(LOG_ERR, "ERROR: Invalid device ID: %d\n", devid);
++    }
+ 
+ }   
 diff --git a/tools/Config.mk b/tools/Config.mk
 index 59516caf5b..bd9b573c46 100644
 --- a/tools/Config.mk
@@ -557,7 +582,7 @@ index 59516caf5b..bd9b573c46 100644
  ifeq ($(CONFIG_WINDOWS_NATIVE),y)
  define CLEAN
  	$(Q) if exist *$(OBJEXT) (del /f /q *$(OBJEXT))
---- /dev/null	2026-07-29 16:02:16.551668679 -0500
+--- /dev/null	2026-08-07 18:21:01.854467679 -0500
 +++ tools/Zenc.defs	2026-04-24 19:03:53.837547984 -0500
 @@ -0,0 +1,26 @@
 +############################################################################
@@ -586,7 +611,7 @@ index 59516caf5b..bd9b573c46 100644
 +
 +ZENCFLAGS := transpile -q --hide-symbols 
 +
---- /dev/null	2026-07-29 16:02:16.551668679 -0500
+--- /dev/null	2026-08-07 18:21:01.854467679 -0500
 +++ tools/C3.defs	2026-06-01 08:17:35.641172740 -0500
 @@ -0,0 +1,48 @@
 +############################################################################
@@ -638,9 +663,9 @@ index 59516caf5b..bd9b573c46 100644
 +    riscv-none-elf-nm $1 | awk '$$2 == "w" || $$2 == "W" {printf " -u %s", $$3 } $$1 == "w" {printf " -u %s", $$2}' > $(APPDIR)$(DELIM)c3_ldflags/$(PROGNAME).ldflags 
 +endef
 \ No newline at end of file
---- /dev/null	2026-07-29 16:02:16.551668679 -0500
-+++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c	2026-08-04 19:02:07.846793782 -0500
-@@ -0,0 +1,229 @@
+--- /dev/null	2026-08-07 18:21:01.854467679 -0500
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c	2026-08-07 15:48:51.032751100 -0500
+@@ -0,0 +1,227 @@
 +#include <nuttx/config.h>
 +#include <errno.h>
 +#include <syslog.h>
@@ -839,13 +864,11 @@ index 59516caf5b..bd9b573c46 100644
 +    }
 +#endif
 +
-+#if CONFIG_INPUT_ADS7843E
 +  ret = esp32c3_tsc_setup(priv.spi, 0);
 +  if (ret < 0)
 +    {
 +      syslog(LOG_ERR, "ERROR: esp32c3_tsc_setup() failed: %d\n", ret);
 +    }
-+#endif
 +
 +  return OK;
 +}
@@ -870,9 +893,9 @@ index 59516caf5b..bd9b573c46 100644
 +      return NULL;
 +    }
 +} 
---- /dev/null	2026-07-29 16:02:16.551668679 -0500
-+++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_xiao_spi.c	2026-07-29 19:32:43.765231621 -0500
-@@ -0,0 +1,42 @@
+--- /dev/null	2026-08-07 18:21:01.854467679 -0500
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_xiao_spi.c	2026-08-05 14:14:39.109342941 -0500
+@@ -0,0 +1,47 @@
 +#include <nuttx/config.h>
 +#include <nuttx/spi/spi.h>
 +#include <nuttx/lcd/lcd.h>
@@ -886,9 +909,6 @@ index 59516caf5b..bd9b573c46 100644
 +#endif
 +#ifndef GPIO_LCD_DC
 +#  error "GPIO_LCD_DC must be defined in board.h!"
-+#endif
-+#ifndef GPIO_LCD_LED
-+#  error "GPIO_LCD_LED must be defined in board.h!"
 +#endif
 +
 +
@@ -913,11 +933,19 @@ index 59516caf5b..bd9b573c46 100644
 +    {
 +      esp_gpiowrite(CONFIG_ESPRESSIF_SPI2_CSPIN, !cmd);
 +    }
++  else if (devid == SPIDEV_TOUCHSCREEN(0))
++    {
++      esp_gpiowrite(TSC_CS_GPIO, !cmd);
++    }
++  else 
++    {
++      syslog(LOG_ERR, "ERROR: Invalid device ID: %d\n", devid);
++    }
 +
 +}   
---- /dev/null	2026-07-29 16:02:16.551668679 -0500
-+++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-08-04 21:47:26.506395813 -0500
-@@ -0,0 +1,123 @@
+--- /dev/null	2026-08-07 18:21:01.854467679 -0500
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-08-08 16:51:49.275015269 -0500
+@@ -0,0 +1,168 @@
 +/****************************************************************************
 + * boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c
 + *
@@ -931,20 +959,19 @@ index 59516caf5b..bd9b573c46 100644
 +#include <errno.h>
 +
 +#include <nuttx/spi/spi.h>
-+#include <nuttx/irq.h>
-+#include <nuttx/input/ads7843e.h>
 +
 +#include "espressif/esp_spi.h"
 +#include "espressif/esp_gpio.h"
 +
 +#include "esp32c3-xiao.h"
++#include <arch/board/board.h>
 +
 +/* Hardware wiring (from your message):
 + *  T_CS  -> GPIO20
 + *  T_DIN -> GPIO10 (MOSI)
-+ *  T_DOUT-> GPIO6  (MISO)
++ *  T_DOUT-> GPIO7  (MISO)
 + *  T_CLK -> GPIO8  (SCK)
-+ *  T_IRQ -> OPEN (not used)
++ *  T_IRQ -> GPIO6 (IRQ required by nuttx driver )
 + *
 + * Note: SPI CS mapping is controlled by CONFIG_ESPRESSIF_SPI2_CSPIN or
 + *       by software CS (CONFIG_ESPRESSIF_SPI_SWCS). Ensure the build
@@ -953,64 +980,51 @@ index 59516caf5b..bd9b573c46 100644
 + */
 +
 +/* If you want to centralize pin defines, move/adjust these in board headers. */
-+#define TSC_CS_GPIO     20  /* GPIO20 (T_CS) - ensure SPI CS mapping or SWCS uses this */
++//#define TSC_IRQ_GPIO     6   /* GPIO6 (T_IRQ) */
++//#define TSC_CS_GPIO     20  /* GPIO20 (T_CS) - ensure SPI CS mapping or SWCS uses this */
 +
-+/* Forward declarations for callbacks required by ads7843e driver */
-+static int  tsc_attach(struct ads7843e_config_s *state, xcpt_t isr);
-+static void tsc_enable(struct ads7843e_config_s *state, bool enable);
-+static void tsc_clear(struct ads7843e_config_s *state);
-+static bool tsc_busy(struct ads7843e_config_s *state);
-+static bool tsc_pendown(struct ads7843e_config_s *state);
++static struct spi_dev_s *g_spi2_dev;
 +
-+/* ads7843e configuration structure passed to the driver */
-+static struct ads7843e_config_s g_tscinfo =
++#define GET_X_CMD 0xD3
++#define GET_Y_CMD 0x93
++
++#define SCREEN_WIDTH  240  // Change to your XIAO screen width
++#define SCREEN_HEIGHT 320  // Change to your XIAO screen height
++#define ADC_X_MIN   200
++#define ADC_X_MAX   3800
++#define ADC_Y_MIN   200
++#define ADC_Y_MAX   3800
++
++static int16_t map_adc_to_screen_x(uint16_t raw_x)
 +{
-+  .frequency = CONFIG_ADS7843E_FREQUENCY,
-+  .attach    = tsc_attach,
-+  .enable    = tsc_enable,
-+  .clear     = tsc_clear,
-+  .busy      = tsc_busy,
-+  .pendown   = tsc_pendown,
-+};
-+
-+/* Callbacks ---------------------------------------------------------------*/
-+
-+/* No IRQ usage: attach is a no-op */
-+static int tsc_attach(struct ads7843e_config_s *state, xcpt_t isr)
-+{
-+  return OK;
++    // Clamp values
++    if (raw_x < ADC_X_MIN) raw_x = ADC_X_MIN;
++    if (raw_x > ADC_X_MAX) raw_x = ADC_X_MAX;
++    
++    // Scale to screen width
++    return (int16_t)(((uint32_t)(raw_x - ADC_X_MIN) * SCREEN_WIDTH) / (ADC_X_MAX - ADC_X_MIN));
 +}
 +
-+/* enable/disable IRQ: no-op since we do not configure an interrupt */
-+static void tsc_enable(struct ads7843e_config_s *state, bool enable)
++static int16_t map_adc_to_screen_y(uint16_t raw_y)
 +{
-+  (void)state;
-+  (void)enable;
++    if (raw_y < ADC_Y_MIN) raw_y = ADC_Y_MIN;
++    if (raw_y > ADC_Y_MAX) raw_y = ADC_Y_MAX;
++    
++    return (int16_t)(((uint32_t)(raw_y - ADC_Y_MIN) * SCREEN_HEIGHT) / (ADC_Y_MAX - ADC_Y_MIN));
 +}
 +
-+/* clear pending IRQ: no-op */
-+static void tsc_clear(struct ads7843e_config_s *state)
++
++static void esp32c3_xiao_tsc_init(struct spi_dev_s *spi)
 +{
-+  (void)state;
++    /* Initialize the SPI interface for the touchscreen controller */
++    /* This may involve setting up SPI mode, frequency, etc. */
++    /* For example: */
++    SPI_SETMODE(spi, SPIDEV_MODE0);
++    SPI_SETBITS(spi, 8);
++    SPI_SETFREQUENCY(spi, 1000000); // 1 MHz for example
++    g_spi2_dev = spi;
 +}
 +
-+/* BUSY pin not used in this wiring */
-+static bool tsc_busy(struct ads7843e_config_s *state)
-+{
-+  (void)state;
-+  return false;
-+}
-+
-+/* PENIRQ not used per user requirement.
-+ * Return 'true' to force polling by the driver's worker (no IRQ).
-+ * Note: this will make the driver sample when it expects pen down;
-+ *       tune thresholds or modify pendown() later if you add a pen detect pin.
-+ */
-+static bool tsc_pendown(struct ads7843e_config_s *state)
-+{
-+  (void)state;
-+  return true;
-+}
 +
 +/* Public setup function called from board bringup */
 +int esp32c3_tsc_setup(struct spi_dev_s *spi, int minor)
@@ -1023,22 +1037,81 @@ index 59516caf5b..bd9b573c46 100644
 +   * is enabled and configure the GPIO accordingly.
 +   */
 +
-+#ifdef CONFIG_ESPRESSIF_SPI_SWCS
 +  esp_configgpio(TSC_CS_GPIO, OUTPUT | PULLUP | DRIVE_2);
 +  esp_gpiowrite(TSC_CS_GPIO, true);
-+#endif
 +
-+  /* Register the ADS7843E driver (this schedules the driver's worker).
-+   * The driver will use the provided callbacks (which are no-ops or polling).
-+   */
-+  ret = ads7843e_register(spi, &g_tscinfo, minor);
-+  if (ret < 0)
-+    {
-+      syslog(LOG_ERR, "TSC: ads7843e_register failed: %d\n", ret);
-+      return ret;
++  esp32c3_xiao_tsc_init(spi);
++  return OK;
++}
++
++bool esp32c3_xiao_tsc_get_xy(int32_t *x, int32_t *y)
++{
++    uint16_t x_raw = 0xFFFF;
++    uint16_t y_raw = 0xFFFF;
++    uint8_t  buffer[2];
++    uint16_t result;
++
++    if (!g_spi2_dev) {
++        return false;
 +    }
 +
-+  syslog(LOG_INFO, "TSC: XPT2046/ADS7843E registered as /dev/input%d\n", minor);
-+  return OK;
++
++    SPI_LOCK(g_spi2_dev, true);
++    SPI_SETMODE(g_spi2_dev, SPIDEV_MODE0);
++    SPI_SETBITS(g_spi2_dev, 8);             /* <-- Force 8-bit words */
++    SPI_SETFREQUENCY(g_spi2_dev, 1000000);
++
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), true);
++
++  /* Send the command */
++
++    SPI_SEND(g_spi2_dev, GET_Y_CMD);
++
++  /* Wait a tiny amount to make sure that the acquisition time is complete */
++
++    up_udelay(3); /* 3 microseconds */
++
++  /* Read the 12-bit data (LS 4 bits will be padded with zero) */
++
++    SPI_RECVBLOCK(g_spi2_dev, buffer, 2);
++
++    result = ((uint16_t)buffer[0] << 8) | (uint16_t)buffer[1];
++    y_raw = result >> 4;
++    printf("cmd:%02x response:%04x\n", GET_Y_CMD, y_raw);
++
++  /* Deassert CS briefly to start the next acquisition */
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++    up_udelay(5);
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), true);
++
++
++  /* Send the command */
++    SPI_SEND(g_spi2_dev, GET_X_CMD);
++
++  /* Wait a tiny amount to make sure that the acquisition time is complete */
++    up_udelay(10); /* 3 microseconds */
++
++  /* Read the 12-bit data (LS 4 bits will be padded with zero) */
++    SPI_RECVBLOCK(g_spi2_dev, buffer, 2);
++
++    result = ((uint16_t)buffer[0] << 8) | (uint16_t)buffer[1];
++    x_raw = result >> 4;
++    printf("cmd:%02x response:%04x\n", GET_X_CMD, x_raw);
++
++    /* Unselect and SPI BUS UNLOCK: Give control back to the ILI9341 display */
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++    SPI_LOCK(g_spi2_dev, false);
++
++     /* PROCESS COORDINATES */
++    if (x_raw >= 4000 || y_raw >= 4000 || x_raw == 0 || y_raw == 0) 
++    {
++        return false;
++    } 
++    else 
++    {
++        *x = map_adc_to_screen_x(x_raw);
++        *y = map_adc_to_screen_y(y_raw);
++        return true;
++    }
 +}
 \ No newline at end of file
