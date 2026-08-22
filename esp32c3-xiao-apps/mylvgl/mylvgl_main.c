@@ -52,7 +52,6 @@ int create_button_ui(void)
     lv_label_set_text(label_start, "Start");
     lv_obj_center(label_start);
 
-#if 0
 
     /* --- Stop Button --- */
     lv_obj_t * btn_stop = lv_button_create(scr);
@@ -63,7 +62,6 @@ int create_button_ui(void)
     lv_obj_t * label_stop = lv_label_create(btn_stop);
     lv_label_set_text(label_stop, "Stop");
     lv_obj_center(label_stop);
-#endif
     return 0;
 }
 
@@ -77,7 +75,7 @@ static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data)
         data->point.x = x;
         data->point.y = y;
         data->state = LV_INDEV_STATE_PRESSED;
-        printf("X: %d Y: %d\n", x, y);
+        //printf("X: %d Y: %d\n", x, y);
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
     }
@@ -129,34 +127,18 @@ int mylvgl_main(int argc, char *argv[])
     touchscreen_init();
 
 
-#if 1
     /* 4. Build UI on the active screen created by lv_nuttx_init */
     scr = lv_screen_active(); // or lv_scr_act()
     if (scr) {
-#if 0
-        lv_obj_t *label = lv_label_create(scr);
-        if (label) {
-            lv_label_set_text(label, "Hello NuttX!");
-            lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+        if (create_button_ui() != 0) {
+            printf("mylvgl: did not create buttons\n");
+            return -1;
         }
-#endif
-        lv_obj_t * btn_start = lv_btn_create(scr);
-        lv_obj_set_size(btn_start, 100, 50);
-        lv_obj_align(btn_start, LV_ALIGN_CENTER, -60, 0);
-        lv_obj_set_style_bg_color(btn_start, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
-        lv_obj_add_event_cb(btn_start, start_btn_event_cb, LV_EVENT_CLICKED, NULL);
-
-        lv_obj_t * label_start = lv_label_create(btn_start);
-        lv_label_set_text(label_start, "Start");
-        lv_obj_center(label_start);
     }
-#endif 
-#if 0
-    if (create_button_ui() != 0) {
-        printf("mylvgl: did not create buttons\n");
+    else {
+        printf("mylvgl: could not get screen\n");
         return -1;
     }
-#endif
 
 
     /* 5. Main Execution Loop */

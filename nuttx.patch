@@ -944,8 +944,8 @@ index 59516caf5b..bd9b573c46 100644
 +
 +}   
 --- /dev/null	2026-08-07 18:21:01.854467679 -0500
-+++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-08-08 16:51:49.275015269 -0500
-@@ -0,0 +1,168 @@
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-08-22 17:32:00.673291747 -0500
+@@ -0,0 +1,173 @@
 +/****************************************************************************
 + * boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c
 + *
@@ -985,15 +985,16 @@ index 59516caf5b..bd9b573c46 100644
 +
 +static struct spi_dev_s *g_spi2_dev;
 +
-+#define GET_X_CMD 0xD3
-+#define GET_Y_CMD 0x93
++#define GET_X_CMD 0xD0 // was 0xD3
++#define GET_Y_CMD 0x90 // was 0x93
 +
-+#define SCREEN_WIDTH  240  // Change to your XIAO screen width
-+#define SCREEN_HEIGHT 320  // Change to your XIAO screen height
++#define SCREEN_WIDTH  320  // Change to your XIAO screen width
++#define SCREEN_HEIGHT 240  // Change to your XIAO screen height
++// Measure this for your specific touchscreen if needed. These are my values for a 320x240 screen.
 +#define ADC_X_MIN   200
-+#define ADC_X_MAX   3800
-+#define ADC_Y_MIN   200
-+#define ADC_Y_MAX   3800
++#define ADC_X_MAX   2000 
++#define ADC_Y_MIN   160 
++#define ADC_Y_MAX   2000 
 +
 +static int16_t map_adc_to_screen_x(uint16_t raw_x)
 +{
@@ -1077,7 +1078,7 @@ index 59516caf5b..bd9b573c46 100644
 +
 +    result = ((uint16_t)buffer[0] << 8) | (uint16_t)buffer[1];
 +    y_raw = result >> 4;
-+    printf("cmd:%02x response:%04x\n", GET_Y_CMD, y_raw);
++    //printf("GET_Y_CMD: cmd:%02x y_raw:%04x\n", GET_Y_CMD, y_raw);
 +
 +  /* Deassert CS briefly to start the next acquisition */
 +    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
@@ -1096,14 +1097,18 @@ index 59516caf5b..bd9b573c46 100644
 +
 +    result = ((uint16_t)buffer[0] << 8) | (uint16_t)buffer[1];
 +    x_raw = result >> 4;
-+    printf("cmd:%02x response:%04x\n", GET_X_CMD, x_raw);
++    // printf("GET_X_CMD: cmd:%02x x_raw:%04x\n", GET_X_CMD, x_raw);
 +
 +    /* Unselect and SPI BUS UNLOCK: Give control back to the ILI9341 display */
 +    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
 +    SPI_LOCK(g_spi2_dev, false);
 +
 +     /* PROCESS COORDINATES */
-+    if (x_raw >= 4000 || y_raw >= 4000 || x_raw == 0 || y_raw == 0) 
++    if (x_raw == 0 &&  (y_raw > 2000 && y_raw < 2100))  /* Untouched raw coordinates */
++    {
++        return false;
++    }
++    else if (x_raw == 0 || y_raw == 0) /* Untouched raw coordinates */
 +    {
 +        return false;
 +    } 

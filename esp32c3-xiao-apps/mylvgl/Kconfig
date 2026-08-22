@@ -23,8 +23,7 @@ config ESP32C3_XIAO_MYLVGL_PRIORITY
 	default 100
 
 config ESP32C3_XIAO_MYLVGL_STACKSIZE
-	int "mylvgl stack size"
-    default 16358 
-#	default DEFAULT_TASK_STACKSIZE
+    int "mylvgl stack size"
+    default 32768 
 
 endif
