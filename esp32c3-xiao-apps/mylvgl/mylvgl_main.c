@@ -10,6 +10,62 @@
 
 bool esp32c3_xiao_tsc_get_xy(int *x, int *y);
 
+lv_obj_t *scr;
+
+/* Callback function for the "Start" button */
+static void start_btn_event_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED) {
+        printf("Starts pressed\n");
+    }
+}
+
+/* Callback function for the "Stop" button */
+static void stop_btn_event_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if (code == LV_EVENT_CLICKED) {
+        printf("Stopped pressed\n");
+    }
+}
+
+/* Main UI creation function */
+int create_button_ui(void)
+{
+    /* Get active screen */
+    scr = lv_screen_active();
+    if (!scr) {
+        return 1;
+    }
+
+    /* --- Start Button --- */
+    lv_obj_t * btn_start = lv_button_create(scr);
+    lv_obj_set_size(btn_start, 100, 50);
+    lv_obj_align(btn_start, LV_ALIGN_CENTER, -60, 0);
+    lv_obj_add_event_cb(btn_start, start_btn_event_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t * label_start = lv_label_create(btn_start);
+    lv_label_set_text(label_start, "Start");
+    lv_obj_center(label_start);
+
+#if 0
+
+    /* --- Stop Button --- */
+    lv_obj_t * btn_stop = lv_button_create(scr);
+    lv_obj_set_size(btn_stop, 100, 50);
+    lv_obj_align(btn_stop, LV_ALIGN_CENTER, 60, 0);
+    lv_obj_add_event_cb(btn_stop, stop_btn_event_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t * label_stop = lv_label_create(btn_stop);
+    lv_label_set_text(label_stop, "Stop");
+    lv_obj_center(label_stop);
+#endif
+    return 0;
+}
+
 /* Local wrapper callback that satisfies LVGL structure requirements */
 static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
@@ -72,15 +128,34 @@ int mylvgl_main(int argc, char *argv[])
     touchscreen_init();
 
 
+#if 1
     /* 4. Build UI on the active screen created by lv_nuttx_init */
-    lv_obj_t *scr = lv_screen_active(); // or lv_scr_act()
+    scr = lv_screen_active(); // or lv_scr_act()
     if (scr) {
+#if 0
         lv_obj_t *label = lv_label_create(scr);
         if (label) {
             lv_label_set_text(label, "Hello NuttX!");
             lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
         }
+#endif
+        lv_obj_t * btn_start = lv_btn_create(scr);
+        lv_obj_set_size(btn_start, 100, 50);
+        lv_obj_align(btn_start, LV_ALIGN_CENTER, -60, 0);
+        lv_obj_add_event_cb(btn_start, start_btn_event_cb, LV_EVENT_CLICKED, NULL);
+
+        lv_obj_t * label_start = lv_label_create(btn_start);
+        lv_label_set_text(label_start, "Start");
+        lv_obj_center(label_start);
     }
+#endif 
+#if 0
+    if (create_button_ui() != 0) {
+        printf("mylvgl: did not create buttons\n");
+        return -1;
+    }
+#endif
+
 
     /* 5. Main Execution Loop */
     printf("mylvgl: Enter main loop...\n");
