@@ -45,6 +45,7 @@ int create_button_ui(void)
     lv_obj_t * btn_start = lv_button_create(scr);
     lv_obj_set_size(btn_start, 100, 50);
     lv_obj_align(btn_start, LV_ALIGN_CENTER, -60, 0);
+    lv_obj_set_style_bg_color(btn_start, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
     lv_obj_add_event_cb(btn_start, start_btn_event_cb, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t * label_start = lv_label_create(btn_start);
@@ -142,6 +143,7 @@ int mylvgl_main(int argc, char *argv[])
         lv_obj_t * btn_start = lv_btn_create(scr);
         lv_obj_set_size(btn_start, 100, 50);
         lv_obj_align(btn_start, LV_ALIGN_CENTER, -60, 0);
+        lv_obj_set_style_bg_color(btn_start, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
         lv_obj_add_event_cb(btn_start, start_btn_event_cb, LV_EVENT_CLICKED, NULL);
 
         lv_obj_t * label_start = lv_label_create(btn_start);
