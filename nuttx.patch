@@ -944,7 +944,7 @@ index 59516caf5b..bd9b573c46 100644
 +
 +}   
 --- /dev/null	2026-08-07 18:21:01.854467679 -0500
-+++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-08-22 17:32:00.673291747 -0500
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-08-24 14:09:00.648700592 -0500
 @@ -0,0 +1,173 @@
 +/****************************************************************************
 + * boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c
@@ -1090,7 +1090,7 @@ index 59516caf5b..bd9b573c46 100644
 +    SPI_SEND(g_spi2_dev, GET_X_CMD);
 +
 +  /* Wait a tiny amount to make sure that the acquisition time is complete */
-+    up_udelay(10); /* 3 microseconds */
++    up_udelay(3); /* 3 microseconds */
 +
 +  /* Read the 12-bit data (LS 4 bits will be padded with zero) */
 +    SPI_RECVBLOCK(g_spi2_dev, buffer, 2);
