@@ -14,4 +14,5 @@ source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/helloz/K
 source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/motcontrol/Kconfig"
 source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/mylvgl/Kconfig"
 source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/mypwm/Kconfig"
+source "/home/jrusso/Documents/Projects/esp32c3-nuttx/esp32c3-xiao-apps/watch_cleaner_controller/Kconfig"
 endmenu # esp32c3 xiao apps

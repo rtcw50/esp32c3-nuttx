@@ -1,0 +1,29 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config  ESP32C3_XIAO_WATCH_CLEANER_CONTROLLER 
+	tristate "\"watch_cleaner_controller\""
+	default n
+	---help---
+		Enable the \"watch_cleaner_controller\" example
+
+if ESP32C3_XIAO_WATCH_CLEANER_CONTROLLER
+
+config ESP32C3_XIAO_WATCH_CLEANER_CONTROLLER_PROGNAME
+	string "Program name"
+	default "watch_cleaner_controller"
+	---help---
+		This is the name of the program that will be used when the NSH ELF
+		program is installed.
+
+config ESP32C3_XIAO_WATCH_CLEANER_CONTROLLER_PRIORITY
+	int "watch_cleaner_controller task priority"
+	default 100
+
+config ESP32C3_XIAO_WATCH_CLEANER_CONTROLLER_STACKSIZE
+    int "watch_cleaner_controller stack size"
+    default 32768 
+
+endif
