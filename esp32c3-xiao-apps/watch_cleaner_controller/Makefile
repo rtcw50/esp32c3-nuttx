@@ -29,8 +29,11 @@ PRIORITY  = $(CONFIG_ESP32C3_XIAO_WATCH_CLEANER_CONTROLLER_PRIORITY)
 STACKSIZE = $(CONFIG_ESP32C3_XIAO_WATCH_CLEANER_CONTROLLER_STACKSIZE)
 MODULE    = $(CONFIG_ESP32C3_XIAO_WATCH_CLEANER_CONTROLLER)
 
-# blink 
+# Source files 
 
 MAINSRC = watch_cleaner_controller_main.c
+
+CSRCS +=  motorcontroller.c motor_driver.c util.c
+MODULE_OBJS = watch_cleaner_controller_main.o motorcontroller.o motor_driver.o util.o
 
 include $(APPDIR)/Application.mk

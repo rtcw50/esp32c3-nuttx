@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "esp32c3-xiao-apps"
+		},
+		{
+			"path": "nuttx"
+		},
+		{
+			"path": "apps"
+		}
+	],
+    "settings": {
+     "C_Cpp.intelliSenseEngine": "disabled",
+     "clangd.arguments": [
+       "--background-index",
+       "--query-driver=**/riscv-none-elf-*"
+    ]
+  }
+}
