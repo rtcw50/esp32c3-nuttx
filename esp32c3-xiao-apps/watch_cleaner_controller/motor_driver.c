@@ -25,26 +25,27 @@
  * Included Files
  ****************************************************************************/
 #include <nuttx/config.h>
+#include <unistd.h>
+#include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <nuttx/timers/pwm.h>
-#include <unistd.h>
 
 #define PWM_MAX_DUTY 95 
 
 static int fd0, fd1;
-static struct pwm_info_s pwm0info, pwm1info;
-static int active_pwm = 1; // 0 for pwm0, 1 for pwm1
+static struct pwm_info_s pwm1info, pwm2info;
+static int active_pwm = 1; // 0 for pwm1, 1 for pwm2
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-/* The device is configured to use Timer 0 and Timer 1 connected to PWM0, PWM1 
-  respectively. Each PWM has 1 channel enabled. Pin assignments to PWM0,1
+/* The device is configured to use Timer 1 and Timer 2 connected to PWM1, PWM2 
+  respectively. Each PWM has 1 channel enabled. Pin assignments to PWM1,2
   is handled via the configuration header (config.h via make menuconfig). 
-  This device uses /dev/pwm0 -> Pin D1/GPIO3 and /dev/pwm1 -> Pin D2/GPIO4.
+  This device uses /dev/pwm1 -> Pin D1/GPIO3 and /dev/pwm2 -> Pin D2/GPIO4.
   To change the pin assignments, use make menuconfig and select the appropriate 
-  pins for PWM0 and PWM1.
+  pins for PWM1 and PWM2.
  */
 static void configure_pwm_info(struct pwm_info_s *info, int frequency, int duty)
 {
@@ -63,14 +64,14 @@ static void configure_pwm_info(struct pwm_info_s *info, int frequency, int duty)
 int wcc_motor_driver_init(void)
 {
   /* Initialize PWM info: 20kHz, 13-bit resolution (0-8191) */
-  memset(&pwm0info, 0, sizeof(struct pwm_info_s)); // Clear the structure first
   memset(&pwm1info, 0, sizeof(struct pwm_info_s)); // Clear the structure first
+  memset(&pwm2info, 0, sizeof(struct pwm_info_s)); // Clear the structure first
 
-  (void)configure_pwm_info(&pwm0info, /* frequency */ 1220, /* duty */ 0);
   (void)configure_pwm_info(&pwm1info, /* frequency */ 1220, /* duty */ 0);
+  (void)configure_pwm_info(&pwm2info, /* frequency */ 1220, /* duty */ 0);
 
-  fd0 = open("/dev/pwm0", O_RDONLY);
-  fd1 = open("/dev/pwm1", O_RDONLY);
+  fd0 = open("/dev/pwm1", O_RDONLY);
+  fd1 = open("/dev/pwm2", O_RDONLY);
 
   if (fd0 < 0 || fd1 < 0) {
     return -1;
@@ -78,11 +79,11 @@ int wcc_motor_driver_init(void)
 
   /* Set initial characteristics  - initally off or stopped */
   int ret;
-  ret = ioctl(fd0, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm0info));
+  ret = ioctl(fd0, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm1info));
   if (ret < 0) {
     return -1;
   } 
-  ret = ioctl(fd1, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm1info));
+  ret = ioctl(fd1, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm2info));
   if (ret < 0) {
     return -1;
   } 
@@ -99,8 +100,8 @@ void wcc_motor_driver_shutdown(void)
 
 int wcc_motor_driver_start_pwm(void)
 {
-  //pwm0info.channels[0].duty = (b16divi(uitoub16(0), 0)); 
   //pwm1info.channels[0].duty = (b16divi(uitoub16(0), 0)); 
+  //pwm2info.channels[0].duty = (b16divi(uitoub16(0), 0)); 
 
   int ret;
   ret = ioctl(fd0, PWMIOC_START, 0);
@@ -117,19 +118,19 @@ int wcc_motor_driver_start_pwm(void)
 void wcc_motor_driver_set_duty(int duty)
 {
     if (active_pwm == 0) {
-        //pwm0info.channels[0].duty = (uint32_t)(((uint64_t)duty << 16) / 100);
-        // Set duty cycle in range 0-8191 with 13-bit resolution and an addend to round up to nearest integer
-        pwm0info.channels[0].duty = (int32_t)((((uint64_t)duty * 
-          ((1 << CONFIG_ESPRESSIF_LEDC_TIMER0_RESOLUTION) - 1)) + 50) / 100);
-        // Negate the implicit right shift by 3 bits
-        pwm0info.channels[0].duty = pwm0info.channels[0].duty << 3;
-        ioctl(fd0, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm0info));
-    } else {
         //pwm1info.channels[0].duty = (uint32_t)(((uint64_t)duty << 16) / 100);
+        // Set duty cycle in range 0-8191 with 13-bit resolution and an addend to round up to nearest integer
         pwm1info.channels[0].duty = (int32_t)((((uint64_t)duty * 
-          ((1 << CONFIG_ESPRESSIF_LEDC_TIMER0_RESOLUTION) - 1)) + 50) / 100);
+          ((1 << CONFIG_ESPRESSIF_LEDC_TIMER1_RESOLUTION) - 1)) + 50) / 100);
+        // Negate the implicit right shift by 3 bits
         pwm1info.channels[0].duty = pwm1info.channels[0].duty << 3;
-        ioctl(fd1, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm1info));
+        ioctl(fd0, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm1info));
+    } else {
+        //pwm2info.channels[0].duty = (uint32_t)(((uint64_t)duty << 16) / 100);
+        pwm2info.channels[0].duty = (int32_t)((((uint64_t)duty * 
+          ((1 << CONFIG_ESPRESSIF_LEDC_TIMER2_RESOLUTION) - 1)) + 50) / 100);
+        pwm2info.channels[0].duty = pwm2info.channels[0].duty << 3;
+        ioctl(fd1, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm2info));
     }
 }
 

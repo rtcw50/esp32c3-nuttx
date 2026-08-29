@@ -1,3 +1,4 @@
+#include <nuttx/arch.h>
 #include <nuttx/config.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -58,8 +59,11 @@ else
 
 
 
- task_create("motor_task", 150, 16384    , wcc_motor_task, NULL);
- task_create("gui_task", 100, 4096, wcc_gui_task, NULL);
+ task_create("gui_task", 130, 8192, wcc_gui_task, NULL);
+
+ up_udelay(5000000);   // Give the GUI time to initialize and open the queues
+
+ task_create("motor_task", 100, 8192, wcc_motor_task, NULL);
 
  return 0;
 }

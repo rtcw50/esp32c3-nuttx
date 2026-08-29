@@ -28,7 +28,16 @@
 #include <time.h>
 #include "watch_cleaner_controller.h"
 
-// Set now to current time 
+/**
+ * @brief Get the current time
+ * 
+ * Retrieves the current monotonic clock time and stores it in the provided timespec structure.
+ * 
+ * @param now Pointer to a timespec structure where the current time will be stored
+ * @return int 0 on success, -1 on error (errno will be set)
+ * 
+ * @note Uses CLOCK_MONOTONIC which is unaffected by system clock adjustments
+ */
 int wcc_get_now(struct timespec *now)
 {
     int rv = clock_gettime(CLOCK_MONOTONIC, now);
@@ -38,7 +47,19 @@ int wcc_get_now(struct timespec *now)
     return 0;
 }
 
-// Set an absolute time in the future wait_ms from current time
+/**
+ * @brief Calculate an absolute time in the future
+ * 
+ * Computes an absolute deadline by adding the specified number of milliseconds
+ * to the current monotonic time.
+ * 
+ * @param future_time Pointer to a timespec structure where the calculated future time will be stored
+ * @param wait_ms Number of milliseconds to add to current time (must be non-negative)
+ * @return int 0 on success, -1 on error
+ * 
+ * @note Handles overflow of nanoseconds by carrying over to seconds
+ * @note Uses MC_MS_PER_SEC and MC_NS_PER_MS constants from header file
+ */
 int wcc_get_abstime_from_now(struct timespec *future_time, long wait_ms)
 {
     clock_gettime(CLOCK_MONOTONIC, future_time);
@@ -56,6 +77,17 @@ int wcc_get_abstime_from_now(struct timespec *future_time, long wait_ms)
     return 0;
 }
  
+/**
+ * @brief Compare two timespec structures
+ * 
+ * Compares two absolute times to determine their relative ordering.
+ * 
+ * @param a Pointer to the first timespec structure
+ * @param b Pointer to the second timespec structure
+ * @return int -1 if a < b, 0 if a == b, 1 if a > b
+ * 
+ * @note Returns -1 if a is earlier than b, 1 if a is later than b, 0 if equal
+ */
 int wcc_timespec_compare(const struct timespec *a, const struct timespec *b)
 {
     if (a->tv_sec < b->tv_sec) {
@@ -73,6 +105,19 @@ int wcc_timespec_compare(const struct timespec *a, const struct timespec *b)
     return 0;
 }
 
+/**
+ * @brief Find the minimum deadline from multiple timespec values
+ * 
+ * Determines the earliest (minimum) time from three provided timespec structures.
+ * 
+ * @param t1 Pointer to the first timespec structure
+ * @param t2 Pointer to the second timespec structure
+ * @param t3 Pointer to the third timespec structure
+ * @return struct timespec The earliest (minimum) time among the three inputs
+ * 
+ * @note Returns a copy of the minimum timespec, not a pointer
+ * @note Uses wcc_timespec_compare for comparison
+ */
 struct timespec wcc_get_min_deadline(struct timespec *t1, struct timespec *t2, struct timespec *t3)
 {
     struct timespec min = *t1;

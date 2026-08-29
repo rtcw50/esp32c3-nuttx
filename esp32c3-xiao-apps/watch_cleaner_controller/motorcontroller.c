@@ -1,19 +1,29 @@
 #include <nuttx/config.h>
+#include <stdio.h>
 #include <nuttx/mqueue.h>
 #include <time.h>
+#include <errno.h>
 #include "watch_cleaner_controller.h"
 
 static mqd_t cmd_q;
 static mqd_t tel_q;
 
+/* Local Prototypes */
 static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_s *res_from_motor);
 static int handle_ui_command(struct clean_cmd_msg_s *cmd); 
+static void motorcontroller_init(void);
+
+
 
 static void motorcontroller_init() {
     // Initialize the motor controller
-    wcc_motor_driver_init();
+    if (wcc_motor_driver_init() != 0) {
+        printf("watch_cleaner: Motor driver initialization failed\n");
+    }
+    else {
+        printf("watch_cleaner: Motor driver initialized successfully\n");
+    }
 }
-
 
 int wcc_motor_task(int argc, char *argv[])
 {
@@ -28,6 +38,7 @@ int wcc_motor_task(int argc, char *argv[])
     if (cmd_q == (mqd_t)-1 || tel_q == (mqd_t)-1) {
         return -1;
     }
+    printf("watch_cleaner: motor task started, waiting for commands...\n");
 
     struct clean_cmd_msg_s cmd; 
     ssize_t nbytes;
@@ -40,6 +51,7 @@ int wcc_motor_task(int argc, char *argv[])
             perror("mq_receive");
             break;
         }
+        printf("watch_cleaner: received command %d\n", cmd.command);
         handle_ui_command(&cmd);
     }
     mq_close(cmd_q);
@@ -80,8 +92,23 @@ static int handle_ui_command(struct clean_cmd_msg_s *cmd) {
         // The following cases are handled in the run_cleaning_cycle function, 
         // but we can also send a message back to the UI to indicate the state change
         case MSG_STOP_REQ:
+            res_from_motor.state = MOTOR_STATE_STOPPED;
+            res_from_motor.time_remaining = 0;
+            res_from_motor.current_duty = 0;
+            mq_send(tel_q, (void*)&res_from_motor, sizeof(struct clean_tel_msg_s), 0);  
+            break;
         case MSG_PAUSE:
+            res_from_motor.state = MOTOR_STATE_PAUSED;
+            res_from_motor.time_remaining = 0;
+            res_from_motor.current_duty = 0;
+            mq_send(tel_q, (void*)&res_from_motor, sizeof(struct clean_tel_msg_s), 0);  
+            break;
         case MSG_ABORT:
+            res_from_motor.state = MOTOR_STATE_ABORTED;
+            res_from_motor.time_remaining = 0;
+            res_from_motor.current_duty = 0;
+            mq_send(tel_q, (void*)&res_from_motor, sizeof(struct clean_tel_msg_s), 0);  
+            break;
         case MSG_SET_DURATION:
         case MSG_SET_SPEED:
         case MSG_SET_AGITATE_DURATION:
@@ -111,7 +138,7 @@ static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_
 
     struct timespec now, next_tick, end_time, next_motor_reverse_time;
     
-    /* motor driver initialization */
+    /* start the motor, duty is 0 via initialization */
     if (wcc_motor_driver_start_pwm() != 0) {
         return -1;
     }
@@ -127,8 +154,14 @@ static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_
 
         /* Get the minimum deadline among the three */
         struct timespec deadline = wcc_get_min_deadline(&end_time, &next_motor_reverse_time, &next_tick);
+        
+        // Use a shorter timeout and yield to allow GUI task to run
+        struct timespec now_deadline;
+        wcc_get_now(&now_deadline);
+        now_deadline.tv_nsec += 10000000; // 10ms timeout for checking messages
+        
         // This will block for deadline milliseconds and then continue if no message is received
-        ssize_t bytes_received = mq_timedreceive(cmd_q, (char *)&async_msg, sizeof(async_msg), NULL, &deadline);
+        ssize_t bytes_received = mq_timedreceive(cmd_q, (char *)&async_msg, sizeof(async_msg), NULL, &now_deadline);
         
         // Get the current time
         (void)wcc_get_now(&now);
@@ -210,6 +243,8 @@ static int run_cleaning_cycle(struct clean_cmd_msg_s *cmd, struct clean_tel_msg_
             reverse_motor = false;
         }
 
+        // Yield CPU time to allow GUI task to run
+        usleep(10000); // 10ms yield
 
     #if 0
         struct clean_tel_msg_s mot_msg;

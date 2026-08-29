@@ -62,7 +62,7 @@ void wcc_motor_driver_reverse_motor_direction(void);
 
 /* util.c functions */
 int wcc_get_now(struct timespec *now);
-int wcc_get_abstime_from_now(struct timespec *base, long nanoseconds);
+int wcc_get_abstime_from_now(struct timespec *base, long milliseconds);
 int wcc_timespec_compare(const struct timespec *a, const struct timespec *b);
 struct timespec wcc_get_min_deadline(struct timespec *t1, struct timespec *t2, struct timespec *t3);
 
