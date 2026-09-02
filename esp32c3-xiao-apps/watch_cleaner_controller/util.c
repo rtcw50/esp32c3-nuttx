@@ -26,8 +26,12 @@
 #include <nuttx/config.h>
 #include <unistd.h>
 #include <time.h>
+#include <nuttx/mqueue.h>
 #include "watch_cleaner_controller.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 /**
  * @brief Get the current time
  * 
@@ -129,3 +133,14 @@ struct timespec wcc_get_min_deadline(struct timespec *t1, struct timespec *t2, s
     }
     return min;
 }
+
+void ui_send_cmd(mqd_t *q, uint16_t msg_type,uint16_t value)
+{
+    struct clean_cmd_msg_s cmd_msg;
+    cmd_msg.msg_type = msg_type;
+    cmd_msg.value = value;
+    mq_send(*q, (void*)&cmd_msg, sizeof(struct clean_cmd_msg_s), 0);  
+}   
+#ifdef __cplusplus
+}
+#endif

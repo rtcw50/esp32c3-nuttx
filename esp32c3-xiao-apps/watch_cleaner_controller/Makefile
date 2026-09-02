@@ -33,7 +33,9 @@ MODULE    = $(CONFIG_ESP32C3_XIAO_WATCH_CLEANER_CONTROLLER)
 
 MAINSRC = watch_cleaner_controller_main.c
 
+CXXEXT = .cpp
 CSRCS +=  motorcontroller.c motor_driver.c util.c gui.c
-MODULE_OBJS = watch_cleaner_controller_main.o motorcontroller.o motor_driver.o util.o gui.o
+CXXSRCS += wcc_main_screen.cpp wcc_settings.cpp wcc_styles.cpp
+MODULE_OBJS = watch_cleaner_controller_main.o motorcontroller.o motor_driver.o util.o gui.o wcc_main_screen.o wcc_settings.o wcc_styles.o
 
 include $(APPDIR)/Application.mk
