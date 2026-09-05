@@ -33,9 +33,9 @@ static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data)
 
     if (esp32c3_xiao_tsc_get_xy(&x, &y)) {
         data->point.x = x;
-        data->point.y = y;
+        data->point.y = 240-y;
         data->state = LV_INDEV_STATE_PRESSED;
-        //printf("X: %d Y: %d\n", x, y);
+        printf("X: %d Y: %d\n", x, y);
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
     }
@@ -43,11 +43,21 @@ static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data)
 
 static void queues_init()
 {
+const struct mq_attr cleaner_cmd_attr = {
+    .mq_maxmsg = 10,
+    .mq_msgsize = sizeof(struct clean_cmd_msg_s),
+    .mq_flags = 0
+};
+const struct mq_attr cleaner_tel_attr = {
+    .mq_maxmsg = 10,
+    .mq_msgsize = sizeof(struct clean_tel_msg_s),
+    .mq_flags = 0
+};
     /* Open the TX channel to the motor controller (Write Only) */
-    cmd_q = mq_open("/cleaner_cmd_q", O_WRONLY);
+    cmd_q = mq_open("/cleaner_cmd_q", O_WRONLY, 0666, &cleaner_cmd_attr);
     
     /* Open the RX channel from the motor controller (Read Only) */
-    tel_q = mq_open("/cleaner_tel_q", O_RDONLY);
+    tel_q = mq_open("/cleaner_tel_q", O_RDONLY|O_NONBLOCK, 0666, &cleaner_tel_attr);
     if (cmd_q == (mqd_t)-1 || tel_q == (mqd_t)-1) {
         printf("watch_cleaner(gui): failed to open message queues\n");
     }
@@ -87,6 +97,9 @@ int wcc_gui_task(int argc, char *argv[])
         return -1;
     }
     printf("watch_cleaner: display wrapper initialized successfully\n");
+
+    printf("Hor: %ld, Ver: %ld\n",lv_disp_get_hor_res(result.disp), lv_disp_get_ver_res(result.disp));
+
 
 
     queues_init();

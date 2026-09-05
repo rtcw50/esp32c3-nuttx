@@ -44,7 +44,7 @@ extern "C" {
  */
 int wcc_get_now(struct timespec *now)
 {
-    int rv = clock_gettime(CLOCK_MONOTONIC, now);
+    int rv = clock_gettime(CLOCK_REALTIME, now);
     if (rv == -1) {
         return -1;
     }
@@ -66,7 +66,8 @@ int wcc_get_now(struct timespec *now)
  */
 int wcc_get_abstime_from_now(struct timespec *future_time, long wait_ms)
 {
-    clock_gettime(CLOCK_MONOTONIC, future_time);
+    // CLOCK_MONOTONIC 
+    clock_gettime(CLOCK_REALTIME, future_time);
     if (wait_ms <= MC_MS_PER_SEC) {
         future_time->tv_nsec += (wait_ms * MC_NS_PER_MS);
     }
@@ -132,6 +133,23 @@ struct timespec wcc_get_min_deadline(struct timespec *t1, struct timespec *t2, s
         min = *t3;
     }
     return min;
+}
+
+void wcc_timespec_add_ms(struct timespec *ts, long ms)
+{
+    ts->tv_sec += ms / MC_MS_PER_SEC;
+    ts->tv_nsec += (ms % MC_MS_PER_SEC) * MC_NS_PER_MS;
+    if (ts->tv_nsec >= MC_NS_PER_SEC) {
+        ts->tv_sec += 1;
+        ts->tv_nsec -= MC_NS_PER_SEC;
+    }
+}
+
+long wcc_elapsed_ms(const struct timespec *start, const struct timespec *end)
+{
+    long elapsed_sec = end->tv_sec - start->tv_sec;
+    long elapsed_nsec = end->tv_nsec - start->tv_nsec;
+    return (elapsed_sec * MC_MS_PER_SEC) + (elapsed_nsec / MC_NS_PER_MS);
 }
 
 void ui_send_cmd(mqd_t *q, uint16_t msg_type,uint16_t value)

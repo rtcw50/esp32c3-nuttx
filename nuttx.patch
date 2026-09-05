@@ -85,7 +85,7 @@ index 90aa161913..2265843d54 100644
    .receive     = esp_receive,
    .ioctl       = esp_ioctl,
 diff --git a/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld b/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld
-index e3129b0b68..efa59e09a8 100644
+index e3129b0b68..f9c6f0b6b3 100644
 --- a/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld
 +++ b/boards/risc-v/esp32c3/common/scripts/esp32c3_sections.ld
 @@ -267,6 +267,8 @@ SECTIONS
@@ -117,6 +117,23 @@ index e3129b0b68..efa59e09a8 100644
      *(COMMON)
  
      . = ALIGN (8);
+@@ -533,6 +541,7 @@ SECTIONS
+     __init_array_start = ABSOLUTE(.);
+     KEEP (*(EXCLUDE_FILE (*crtend.* *crtbegin.*) .init_array))
+     __init_array_end = ABSOLUTE(.);
++    _einit = ABSOLUTE(.);
+ 
+     /* Addresses of memory regions reserved via SOC_RESERVE_MEMORY_REGION() */
+ 
+@@ -548,7 +557,7 @@ SECTIONS
+     KEEP (*(SORT_BY_INIT_PRIORITY(.esp_system_init_fn.*)))
+     _esp_system_init_fn_array_end = ABSOLUTE(.);
+ 
+-    _einit = ABSOLUTE(.);
++    /* _einit = ABSOLUTE(.); */
+ 
+   } >default_rodata_seg AT > ROM
+ 
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig b/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig
 index c346b93f0d..3c4c52fb93 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/configs/nsh/defconfig

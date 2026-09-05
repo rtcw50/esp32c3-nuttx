@@ -51,12 +51,23 @@ int wcc_motor_task(int argc, char *argv[])
 {
     motorcontroller_init();
 
+const struct mq_attr cleaner_cmd_attr = {
+    .mq_maxmsg = 10,
+    .mq_msgsize = sizeof(struct clean_cmd_msg_s),
+    .mq_flags = 0
+};
+const struct mq_attr cleaner_tel_attr = {
+    .mq_maxmsg = 10,
+    .mq_msgsize = sizeof(struct clean_tel_msg_s),
+    .mq_flags = 0
+};
     /* Open the RX channel from the UI (Read Only) */
     /* Note: We keep this blocking, so the motor task sleeps until the UI sends a message  */
-    motor_recv_q = mq_open("/cleaner_cmd_q", O_RDONLY);
+    motor_recv_q = mq_open("/cleaner_cmd_q", O_RDONLY, 0666, &cleaner_cmd_attr);
     
     /* Open the TX channel to the UI (Write Only) */
-    motor_send_q = mq_open("/cleaner_tel_q", O_WRONLY);
+    motor_send_q = mq_open("/cleaner_tel_q", O_WRONLY, 0666, &cleaner_tel_attr);
+    
     if (motor_recv_q == (mqd_t)-1 || motor_send_q == (mqd_t)-1) {
         return -1;
     }
@@ -93,8 +104,6 @@ static int handle_ui_command(struct clean_cmd_msg_s *cmd) {
         case MSG_ACTION_CLEAN:
             // Handle clean command
             res_from_motor.state = MOTOR_STATE_RUNNING;
-            res_from_motor.time_remaining = cmd->value;
-            g_run_time = cmd->value; // Update global run time
             current_cycle = CLEAN_CYCLE; // Set current cycle to clean
             if (run_cycle(CLEAN_CYCLE, &res_from_motor) != MC_SUCCESS) {
                 // Handle error
@@ -106,8 +115,6 @@ static int handle_ui_command(struct clean_cmd_msg_s *cmd) {
         case MSG_ACTION_RINSE:
             // Handle clean command
             res_from_motor.state = MOTOR_STATE_RUNNING;
-            res_from_motor.time_remaining = cmd->value;
-            g_run_time = cmd->value; // Update global run time
             current_cycle = RINSE_CYCLE; // Set current cycle to rinse
             if (run_cycle(RINSE_CYCLE, &res_from_motor) != MC_SUCCESS) {
                 // Handle error
@@ -119,8 +126,6 @@ static int handle_ui_command(struct clean_cmd_msg_s *cmd) {
         case MSG_ACTION_SPIN:
             // Handle clean command
             res_from_motor.state = MOTOR_STATE_RUNNING;
-            res_from_motor.time_remaining = cmd->value;
-            g_run_time = cmd->value; // Update global run time
             current_cycle = SPIN_CYCLE; // Set current cycle to spin
             if (run_cycle(SPIN_CYCLE, &res_from_motor) != MC_SUCCESS) {
                 // Handle error
@@ -139,7 +144,7 @@ static int handle_ui_command(struct clean_cmd_msg_s *cmd) {
                 mq_send(motor_send_q, (void*)&res_from_motor, sizeof(struct clean_tel_msg_s), 0);  
             }
             break;
-        // The following cases are handled in the run_cleaning_cycle function, 
+        // The following cases are handled in the run_tion, 
         // but we can also send a message back to the UI to indicate the state change
         case MSG_ACTION_STOP:
             res_from_motor.state = MOTOR_STATE_STOPPED;
@@ -171,11 +176,38 @@ static int handle_ui_command(struct clean_cmd_msg_s *cmd) {
         case MSG_SET_SPIN_TIME: 
             g_spin_time = cmd->value; 
             break; 
+        case MSG_SET_RINSE_TIME: 
+            g_rinse_time = cmd->value; 
+            break;
         default: 
          LV_ASSERT_MSG(false, "Unknown command received in motor task"); 
          break; 
     }   
     return 0;
+}
+
+static void ramp_to_target_duty(int *current_duty, int target_duty, int ramp_factor); 
+static void ramp_to_target_duty(int *current_duty, int target_duty, int ramp_factor) {
+    if (*current_duty < target_duty) {
+        while (*current_duty < target_duty) {
+            *current_duty += ramp_factor; // This provides the soft ramp up
+            if (*current_duty > target_duty) {
+                *current_duty = target_duty; // Ensure we don't overshoot
+            }
+            wcc_motor_driver_set_duty(*current_duty);
+            usleep(10000); // Sleep for 10 ms to allow the motor to respond
+        }
+    } else if (*current_duty > target_duty) {
+        while (*current_duty > target_duty) {
+            *current_duty -= ramp_factor; // This provides the soft ramp down
+            if (*current_duty < target_duty) {
+                *current_duty = target_duty; // Ensure we don't undershoot
+            }
+            wcc_motor_driver_set_duty(*current_duty);
+            usleep(10000); // Sleep for 10 ms to allow the motor to respond
+        }
+    }
+    // do nothing if current_duty == target_duty
 }
 
 
@@ -191,9 +223,9 @@ static int run_cycle(CycleType cycle_type, struct clean_tel_msg_s *response_from
 
     int current_duty = 0;
     bool keep_running = true;
-    bool reverse_motor = false;
+    bool reverse_pending = false;
 
-    struct timespec now, next_tick, end_time, next_motor_reverse_time;
+    struct timespec now, next_control_tick, next_tick, end_time, next_motor_reverse_time;
 
     if (cycle_type == SPIN_CYCLE) {
         // For spin cycle, we use the spin time instead of the run time
@@ -210,6 +242,8 @@ static int run_cycle(CycleType cycle_type, struct clean_tel_msg_s *response_from
         return -1;
     }
     
+    // Next controltick time
+    (void)wcc_get_abstime_from_now(&next_control_tick, 10); // 10 ms for control tick   
     // Next tick time
     (void)wcc_get_abstime_from_now(&next_tick, MC_MS_PER_SEC); // 1 second   
     // Cleaning cycle end time from now 
@@ -217,41 +251,49 @@ static int run_cycle(CycleType cycle_type, struct clean_tel_msg_s *response_from
     // Deadline time to reverse the motor from now
     (void)wcc_get_abstime_from_now(&next_motor_reverse_time, agitate_interval * MC_MS_PER_SEC);
 
+    
+    //printf("watch_cleaner: starting run_cycle loop: run_time: %d, agitate time: %d\n", time_remaining, agitate_interval);
     while (keep_running || current_duty > 0) {
+        //printf("watch_cleaner: run_cycle loop, current_duty: %d, target_duty: %d, time_remaining: %d\n", current_duty, target_duty, time_remaining);
 
-        /* Get the minimum deadline among the three */
-        // CHECK THIS
-        //struct timespec deadline = wcc_get_min_deadline(&end_time, &next_motor_reverse_time, &next_tick);
-        
-        // Use a shorter timeout and yield to allow GUI task to run
-        struct timespec now_deadline;
-        wcc_get_now(&now_deadline);
-        now_deadline.tv_nsec += 10000000; // 10ms timeout for checking messages
-        
+        /* Get the minimum deadline among the four */
+        struct timespec deadline = wcc_get_min_deadline(&next_control_tick, &end_time, &next_motor_reverse_time);
+        if (wcc_timespec_compare(&next_tick, &deadline) < 0) {
+            deadline = next_tick;
+        }
+                                                                                     
         // This will block for deadline milliseconds and then continue if no message is received
-        ssize_t bytes_received = mq_timedreceive(motor_recv_q, (char *)&async_msg, sizeof(async_msg), NULL, &now_deadline);
+        ssize_t bytes_received = mq_timedreceive(motor_recv_q, (char *)&async_msg, sizeof(async_msg), NULL, &deadline);
         
         // Get the current time
         (void)wcc_get_now(&now);
+        // If there's a delay in loop processing below, we need to make next_control_tick is in the future 
+        // (i.e., we don't want to miss the next control tick). If the current time is past the next control tick, 
+        // we need to increment next_control_tick until it's in the future.
+        while (wcc_timespec_compare( &next_control_tick, &now) <= 0) {
+            wcc_timespec_add_ms(&next_control_tick, 10); // Increment next control tick by 10 ms
+        }
         
         if (bytes_received > 0) {
             switch(async_msg.msg_type) {
                 case MSG_ACTION_STOP:
                     response_from_motor->state = MOTOR_STATE_STOPPED;
-                    response_from_motor->time_remaining = 0;
                     target_duty = 0; // Trigger the "Soft Landing"
                     keep_running = false; // Stop trying to run after we hit zero
+                    reverse_pending = false; // Cancel any pending reversal
                     break;
                 case MSG_ACTION_PAUSE:
                     response_from_motor->state = MOTOR_STATE_PAUSED;
-                    response_from_motor->time_remaining = time_remaining;
                     target_duty = 0; // Trigger the "Soft Landing"
                     keep_running = false; // Stop trying to run after we hit zero
+                    reverse_pending = false; // Cancel any pending reversal
                     break;
                 case MSG_ACTION_ABORT:
                     wcc_motor_driver_set_duty(0); // Hard stop for emergencies
                     return MC_ABORTED;
+                // We must account for the elapsed time if a new run time is set during a cycle, so we recalculate the end time based on the new value
                 case MSG_SET_RUNTIME:
+                    // REVISIT: This logic may need to be adjusted based on the current state of the cycle. For example, if we're in a spin cycle, we might not want to adjust the end time based on a new run time. This is a simplification for now.
                     time_remaining = async_msg.value;
                     (void)wcc_get_abstime_from_now(&end_time, time_remaining * MC_MS_PER_SEC);
                     break;
@@ -276,10 +318,13 @@ static int run_cycle(CycleType cycle_type, struct clean_tel_msg_s *response_from
         // Send time update to UI every tick 
         if (wcc_timespec_compare(&now, &next_tick) >= 0) {
             time_remaining = end_time.tv_sec - now.tv_sec; 
+            response_from_motor->state = MOTOR_STATE_RUNNING;
             response_from_motor->time_remaining = time_remaining; 
             mq_send(motor_send_q, (void*)response_from_motor, sizeof(struct clean_tel_msg_s), 0);
             // Update the tick timer, now + 1 sec.
-            (void)wcc_get_abstime_from_now(&next_tick, MC_MS_PER_SEC);
+            wcc_timespec_add_ms(&next_tick, 1 * MC_MS_PER_SEC);
+            //printf("one second tick sent to gui\n");
+
         }
 
         // Check if the runtime has been exceeded
@@ -289,47 +334,32 @@ static int run_cycle(CycleType cycle_type, struct clean_tel_msg_s *response_from
             target_duty = 0;
             response_from_motor->state = MOTOR_STATE_STOPPED;
             response_from_motor->time_remaining = 0;
+            //printf("run_cycle completed\n");
         }
 
-        // Check if it's time to reverse the motor
-        if (wcc_timespec_compare(&now, &next_motor_reverse_time) >= 0) {
-            /* It's time to reverse the motor */
-            reverse_motor = true;
-            target_duty_saved = target_duty; // Save the current target duty
-            target_duty = 0; // Trigger the "Soft Landing" before reversing
-            // Update the deadline for the next motor reverse
-            (void)wcc_get_abstime_from_now(&next_motor_reverse_time, agitate_interval * MC_MS_PER_SEC);
+        // Reversal logic
+        if (!reverse_pending && keep_running && (cycle_type != SPIN_CYCLE) && 
+                wcc_timespec_compare(&now, &next_motor_reverse_time) >= 0) {                     
+            reverse_pending = true;                                                          
+            target_duty_saved = target_duty;                                                 
+            target_duty = 0;                                                                 
+            //printf("Reverse deadline reached\n");                                            
         }
 
+        ramp_to_target_duty(&current_duty, target_duty, ramp_factor);
 
-        /* Incremental Ramp Logic */
-        if (current_duty < target_duty) {
-            current_duty += ramp_factor; // This provides the soft ramp up
-        } else if (current_duty > target_duty) {
-            current_duty -= ramp_factor; // This provides the soft landing
-        }
-
-        wcc_motor_driver_set_duty(current_duty);
-        
-        // Reverse the motor for clean and rinse cycles, but not for spin cycles
-        if (reverse_motor && (current_duty <= target_duty) && (cycle_type != SPIN_CYCLE)) {
+        if (reverse_pending && current_duty == 0 && keep_running) {
+            // Now that the motor has stopped, we can reverse it
             wcc_motor_driver_reverse_motor_direction();
+            reverse_pending = false;
             // Restore the target duty after the motor has stopped
             target_duty = target_duty_saved;
-            reverse_motor = false;
+            ramp_to_target_duty(&current_duty, target_duty, ramp_factor);
+            wcc_timespec_add_ms(&next_motor_reverse_time, agitate_interval * MC_MS_PER_SEC);
+            //printf("Motor reversed\n");
         }
-
-        // Yield CPU time to allow GUI task to run
-        usleep(10000); // 10ms yield
-
-    #if 0
-        struct clean_tel_msg_s mot_msg;
-        mot_msg.state = MOTOR_MESSAGE;
-        mot_msg.message_id = MSG_MOTOR_NOT_RUNNING;
-        mq_send(motor_send_q, (void*)&mot_msg, sizeof(struct clean_tel_msg_s), 0);
-    #endif
         
-
+        wcc_timespec_add_ms(&next_control_tick, 10); // 10 ms for control tick
     }
     return MC_SUCCESS;
 }

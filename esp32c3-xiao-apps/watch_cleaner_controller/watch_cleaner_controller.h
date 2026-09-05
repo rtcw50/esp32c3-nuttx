@@ -72,17 +72,19 @@ struct clean_tel_msg_s {
 #define WCC_BUTTON_YELLOW 0xff,0xff,0x78
 #define TIME_FORMAT "%02ld:%02ld"
 
- #define CLEAN_DUR_DEFAULT (5*60)
+// #define CLEAN_DUR_DEFAULT (5*60)
+ #define CLEAN_DUR_DEFAULT (60)
  #define CLEAN_DUR_MAX (60*60)
  #define RINSE_DUR_DEFAULT (3*60)
  #define RINSE_DUR_MAX (60*60)
  #define SPIN_DUR_DEFAULT  (1*60) 
  #define SPIN_DUR_MAX (60*60)
- #define AGITATE_DUR_DEFAULT (10)
+ //#define AGITATE_DUR_DEFAULT (10)
+ #define AGITATE_DUR_DEFAULT (5)
  #define AGITATE_DUR_MAX (60)
- #define MAX_RPM_DEFAULT (600)
+ #define MAX_RPM_DEFAULT (300)
  #define MAX_RPM_MAX (600)
- #define SPIN_UP_DEFAULT (3)
+ #define SPIN_UP_DEFAULT (5)
  #define SPIN_UP_MAX (10)
 
  #define RAMP_UPDATE_MS (250)
@@ -132,6 +134,7 @@ int wcc_get_now(struct timespec *now);
 int wcc_get_abstime_from_now(struct timespec *base, long milliseconds);
 int wcc_timespec_compare(const struct timespec *a, const struct timespec *b);
 struct timespec wcc_get_min_deadline(struct timespec *t1, struct timespec *t2, struct timespec *t3);
+void wcc_timespec_add_ms(struct timespec *ts, long ms);
 void ui_send_cmd(mqd_t *q, uint16_t msg_type,uint16_t value);
 #ifdef __cplusplus
 }
