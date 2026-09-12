@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include "lvgl/src/core/lv_obj.h"
 #include "lvgl/src/lv_api_map_v8.h"
+#include "lvgl/src/misc/lv_event.h"
 #include "lvgl/src/misc/lv_timer.h"
 #include "watch_cleaner_controller.h"
 
@@ -256,10 +257,13 @@ static void stop_button_event_cb(lv_event_t * event)
 {
   lv_event_code_t code = lv_event_get_code(event);
 
-  if (code == LV_EVENT_CLICKED) {
+  if (code == LV_EVENT_CLICKED) { 
     /* Let the one sec timer shut it down */
     g_countdown_in_sec = 0;
-    //shutdown();
+    /* If paused and stop button is hit, unpause and let one sec timer do shutdown */
+    if (g_one_sec_timer != NULL && lv_timer_get_paused(g_one_sec_timer)) {
+      lv_timer_resume(g_one_sec_timer);
+    }
   }
 }
 
@@ -274,13 +278,14 @@ static lv_obj_t * create_stop_button(lv_obj_t * scr)
     // Stop button is not checkable, does not retain button state.
     // lv_obj_add_flag(stop_button, LV_OBJ_FLAG_CHECKABLE);
     lv_obj_remove_flag(stop_button, LV_OBJ_FLAG_PRESS_LOCK);
-    lv_obj_add_event_cb(stop_button, stop_button_event_cb, LV_EVENT_ALL, NULL);
     lv_obj_set_width(stop_button, 60); 
     lv_obj_set_height(stop_button,60);
     lv_obj_align_to(stop_button, start_button, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 
     /* Apply styles */
     lv_obj_add_style(stop_button, &stop_button_style, LV_STATE_DEFAULT);
+    /* Actions on click */
+    lv_obj_add_event_cb(stop_button, stop_button_event_cb, LV_EVENT_ALL, NULL);
     return stop_button;
 
 }
