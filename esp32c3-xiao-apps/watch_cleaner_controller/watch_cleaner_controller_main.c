@@ -16,7 +16,7 @@ int watch_cleaner_controller_main(int argc, char *argv[])
     /* 1. Board initialization if not executed as a nsh nuttx application */
 #ifdef WCC_STANDALONE
     if (board_app_initialize(0) < 0) {
-        printf("watch_cleaner: board_app_initialize failed\n");
+        //printf("watch_cleaner: board_app_initialize failed\n");
         return -1;
     }   
     printf("watch_cleaner: board initialized\n");
@@ -24,7 +24,7 @@ int watch_cleaner_controller_main(int argc, char *argv[])
 
 /*  Pre-create the Command Queue (UI -> Motor) */
 static const struct mq_attr cleaner_cmd_attr = {
-    .mq_maxmsg = 4,
+    .mq_maxmsg = 10,
     .mq_msgsize = sizeof(struct clean_cmd_msg_s),
     .mq_flags = 0
 };
@@ -42,7 +42,7 @@ else
 
 /* Pre-create the Telemetry Queue (Motor -> UI) */
 static const struct mq_attr cleaner_tel_attr = {
-    .mq_maxmsg = 4,
+    .mq_maxmsg = 10,
     .mq_msgsize = sizeof(struct clean_tel_msg_s),
     .mq_flags = 0
 };
@@ -59,11 +59,11 @@ else
 
 
 
- task_create("gui_task", 100, 8192, wcc_gui_task, NULL);
+ task_create("motor_task", 100, 8192, wcc_motor_task, NULL);
+ task_create("gui_task", 150, 8192, wcc_gui_task, NULL);
 
- up_udelay(5000000);   // Give the GUI time to initialize and open the queues
+ //up_udelay(2000000);   // Give the GUI time to initialize and open the queues
 
- task_create("motor_task", 110, 8192, wcc_motor_task, NULL);
 
  return 0;
 }

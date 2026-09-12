@@ -137,11 +137,22 @@ struct timespec wcc_get_min_deadline(struct timespec *t1, struct timespec *t2, s
 
 void wcc_timespec_add_ms(struct timespec *ts, long ms)
 {
+    // 1. Add whole seconds
     ts->tv_sec += ms / MC_MS_PER_SEC;
+    
+    // 2. Add remaining milliseconds converted to nanoseconds
     ts->tv_nsec += (ms % MC_MS_PER_SEC) * MC_NS_PER_MS;
-    if (ts->tv_nsec >= MC_NS_PER_SEC) {
+    
+    // 3. Robust carry: Handle any amount of nanosecond overflow
+    while (ts->tv_nsec >= MC_NS_PER_SEC) {
         ts->tv_sec += 1;
         ts->tv_nsec -= MC_NS_PER_SEC;
+    }
+    
+    // 4. Defensive check: Handle negative ms just in case
+    while (ts->tv_nsec < 0) {
+        ts->tv_sec -= 1;
+        ts->tv_nsec += MC_NS_PER_SEC;
     }
 }
 
@@ -152,12 +163,41 @@ long wcc_elapsed_ms(const struct timespec *start, const struct timespec *end)
     return (elapsed_sec * MC_MS_PER_SEC) + (elapsed_nsec / MC_NS_PER_MS);
 }
 
+void wcc_delay_ms(long milliseconds)
+{
+    struct timespec request;
+    struct timespec remaining;
+
+    // Convert milliseconds to seconds and nanoseconds
+    request.tv_sec = milliseconds / MC_MS_PER_SEC;
+    request.tv_nsec = (milliseconds % 1000) * MC_NS_PER_MS;
+
+    // Loop in case the sleep is interrupted by a signal
+    while (clock_nanosleep(CLOCK_MONOTONIC, 0, &request, &remaining) == -1) {
+        if (errno == EINTR) {
+            // Interrupted by a signal; resume with the remaining time
+            request = remaining;
+        } else {
+            // A different error occurred
+            break;
+        }
+    }
+}   
+
 void ui_send_cmd(mqd_t *q, uint16_t msg_type,uint16_t value)
 {
     struct clean_cmd_msg_s cmd_msg;
     cmd_msg.msg_type = msg_type;
     cmd_msg.value = value;
     mq_send(*q, (void*)&cmd_msg, sizeof(struct clean_cmd_msg_s), 0);  
+}   
+
+void motor_send_telemetry(mqd_t *q, uint16_t msg_type,uint16_t value)
+{
+    struct clean_tel_msg_s tel_msg;
+    tel_msg.state = msg_type;
+    tel_msg.time_remaining = value;
+    mq_send(*q, (void*)&tel_msg, sizeof(struct clean_tel_msg_s), 0);  
 }   
 #ifdef __cplusplus
 }

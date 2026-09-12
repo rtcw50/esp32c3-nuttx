@@ -30,6 +30,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <nuttx/timers/pwm.h>
+#include "watch_cleaner_controller.h"
 
 #define PWM_MAX_DUTY 95 
 
@@ -115,23 +116,55 @@ int wcc_motor_driver_start_pwm(void)
   return 0;
 }
 
-void wcc_motor_driver_set_duty(int duty)
+int wcc_motor_driver_stop_pwm(void)
 {
-    if (active_pwm == 0) {
-        //pwm1info.channels[0].duty = (uint32_t)(((uint64_t)duty << 16) / 100);
-        // Set duty cycle in range 0-8191 with 13-bit resolution and an addend to round up to nearest integer
-        pwm1info.channels[0].duty = (int32_t)((((uint64_t)duty * 
-          ((1 << CONFIG_ESPRESSIF_LEDC_TIMER1_RESOLUTION) - 1)) + 50) / 100);
-        // Negate the implicit right shift by 3 bits
-        pwm1info.channels[0].duty = pwm1info.channels[0].duty << 3;
-        ioctl(fd0, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm1info));
-    } else {
-        //pwm2info.channels[0].duty = (uint32_t)(((uint64_t)duty << 16) / 100);
-        pwm2info.channels[0].duty = (int32_t)((((uint64_t)duty * 
-          ((1 << CONFIG_ESPRESSIF_LEDC_TIMER2_RESOLUTION) - 1)) + 50) / 100);
-        pwm2info.channels[0].duty = pwm2info.channels[0].duty << 3;
-        ioctl(fd1, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm2info));
-    }
+  int ret;
+  ret = ioctl(fd0, PWMIOC_STOP, 0);
+  if (ret < 0) {
+    return -1;
+  }
+  ret = ioctl(fd1, PWMIOC_STOP, 0);
+  if (ret < 0) {
+    return -1;
+  }
+  return 0;
+}
+
+static void set_pwm1_duty(uint16_t duty)
+{
+  pwm1info.channels[0].duty = (int32_t)((((uint64_t)duty * 
+    ((1 << CONFIG_ESPRESSIF_LEDC_TIMER1_RESOLUTION) - 1)) + 50) / 100);
+  pwm1info.channels[0].duty = pwm1info.channels[0].duty << 3;
+  ioctl(fd0, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm1info));
+}
+
+static void set_pwm2_duty(uint16_t duty)
+{
+  pwm2info.channels[0].duty = (int32_t)((((uint64_t)duty * 
+    ((1 << CONFIG_ESPRESSIF_LEDC_TIMER2_RESOLUTION) - 1)) + 50) / 100);
+  pwm2info.channels[0].duty = pwm2info.channels[0].duty << 3;
+  ioctl(fd1, PWMIOC_SETCHARACTERISTICS, (unsigned long)((uintptr_t)&pwm2info));
+}
+
+void wcc_motor_driver_set_duty_all(uint16_t target_duty)
+{
+  /* Use only to initial duty values to 0 */
+  if (target_duty > 0) 
+    return;
+
+  set_pwm1_duty(target_duty);
+  set_pwm2_duty(target_duty);
+}
+void wcc_motor_driver_set_duty(uint16_t target_duty)
+{
+  if (active_pwm == 0) {
+    set_pwm2_duty(0);
+    set_pwm1_duty(target_duty);
+  }
+  else {
+    set_pwm1_duty(0);
+    set_pwm2_duty(target_duty);
+  }
 }
 
 void wcc_motor_driver_reverse_motor_direction(void)

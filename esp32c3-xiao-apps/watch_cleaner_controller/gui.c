@@ -35,7 +35,7 @@ static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data)
         data->point.x = x;
         data->point.y = 240-y;
         data->state = LV_INDEV_STATE_PRESSED;
-        printf("X: %d Y: %d\n", x, y);
+//        printf("X: %d Y: %d\n", x, y);
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
     }
@@ -54,7 +54,7 @@ const struct mq_attr cleaner_tel_attr = {
     .mq_flags = 0
 };
     /* Open the TX channel to the motor controller (Write Only) */
-    cmd_q = mq_open("/cleaner_cmd_q", O_WRONLY, 0666, &cleaner_cmd_attr);
+    cmd_q = mq_open("/cleaner_cmd_q", O_WRONLY|O_NONBLOCK, 0666, &cleaner_cmd_attr);
     
     /* Open the RX channel from the motor controller (Read Only) */
     tel_q = mq_open("/cleaner_tel_q", O_RDONLY|O_NONBLOCK, 0666, &cleaner_tel_attr);
@@ -96,9 +96,8 @@ int wcc_gui_task(int argc, char *argv[])
         printf("watch_cleaner: lv_nuttx_init failed!\n");
         return -1;
     }
-    printf("watch_cleaner: display wrapper initialized successfully\n");
-
-    printf("Hor: %ld, Ver: %ld\n",lv_disp_get_hor_res(result.disp), lv_disp_get_ver_res(result.disp));
+    //printf("watch_cleaner: display wrapper initialized successfully\n");
+    //printf("Hor: %ld, Ver: %ld\n",lv_disp_get_hor_res(result.disp), lv_disp_get_ver_res(result.disp));
 
 
 
@@ -111,7 +110,7 @@ int wcc_gui_task(int argc, char *argv[])
 
 
     /* Main Execution Loop */
-    printf("watch_cleaner: Enter main gui loop...\n");
+    //printf("watch_cleaner: Enter main gui loop...\n");
     while (1) {
 //        printf ("watch_cleaner: gui loop iteration...\n");
         uint32_t time_till_next = lv_timer_handler();
