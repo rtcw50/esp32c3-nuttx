@@ -1,5 +1,7 @@
-#include <nuttx/arch.h>
 #include <nuttx/config.h>
+#include <nuttx/arch.h>
+#include <nuttx/board.h>
+#include <nuttx/ioexpander/gpio.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -7,9 +9,70 @@
 #include <unistd.h>
 #include <mqueue.h>
 #include <time.h>
+#include <sys/mount.h>
 #include "watch_cleaner_controller.h"
 
+/* Run as a standalone app, not via nsh */
 #define WCC_STANDALONE
+
+/* Define system wide globals here */
+bool g_filesystem_ok;
+bool g_calibration_ok;
+bool g_force_calibration = false;
+
+
+void init_application_storage(void)
+{
+    g_filesystem_ok = false;
+
+    // 1. Attempt to mount the LittleFS partition using the POSIX mount interface
+    // Parameters: Source Block Device, Target Mount point, File system type, Mount flags, Data pointer
+    int ret = mount(LFS_DEV_PATH, LFS_MOUNT_POINT, "littlefs", 0, NULL);
+    
+    if (ret < 0)
+    {
+        // Retry the mount after an automatic format pass
+        ret = mount(LFS_DEV_PATH, LFS_MOUNT_POINT, "littlefs", 0, "autoformat");
+    }
+
+    if (ret == 0)
+    {
+        g_filesystem_ok = true;
+    }
+}
+
+/* If unused GPIO6 is pulled low, then set the force calibration flag */
+static void check_recalibration_pin(void)
+{
+    int ret;
+    bool pinval;
+
+    int recal_pin = open("/dev/gpio6", O_RDWR);
+    if (recal_pin < 0) {
+        goto no_recal;
+    }
+
+    ret = ioctl(recal_pin, GPIOC_SETPINTYPE, GPIO_INPUT_PIN|GPIO_INPUT_PIN_PULLUP);
+    if (ret < 0) {
+        goto no_recal;
+    }
+    ret = ioctl(recal_pin, GPIOC_READ, &pinval);
+    if (ret < 0) {
+        goto no_recal;
+    }
+    /* Check for low value */
+    if (pinval == false) {
+        g_force_calibration = true;
+    }
+    close(recal_pin);
+    return;
+
+
+no_recal:
+    g_force_calibration = false;
+    return;
+}
+
 
 int watch_cleaner_controller_main(int argc, char *argv[])
 {
@@ -19,8 +82,10 @@ int watch_cleaner_controller_main(int argc, char *argv[])
         //printf("watch_cleaner: board_app_initialize failed\n");
         return -1;
     }   
-    printf("watch_cleaner: board initialized\n");
+    //printf("watch_cleaner: board initialized\n");
 #endif
+
+init_application_storage();
 
 /*  Pre-create the Command Queue (UI -> Motor) */
 static const struct mq_attr cleaner_cmd_attr = {
@@ -57,13 +122,11 @@ else
     mq_close(setup_tel);
 }
 
+/* Check the status of GPIO6, if pulled low, force screen re-calibration */
+check_recalibration_pin();
 
-
+ /* Start GUI and motor controller tasks */
  task_create("motor_task", 100, 8192, wcc_motor_task, NULL);
  task_create("gui_task", 150, 8192, wcc_gui_task, NULL);
-
- //up_udelay(2000000);   // Give the GUI time to initialize and open the queues
-
-
  return 0;
 }

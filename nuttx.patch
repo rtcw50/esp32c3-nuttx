@@ -961,8 +961,8 @@ index 59516caf5b..bd9b573c46 100644
 +
 +}   
 --- /dev/null	2026-08-07 18:21:01.854467679 -0500
-+++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-08-24 14:09:00.648700592 -0500
-@@ -0,0 +1,173 @@
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-09-17 13:58:43.800221290 -0500
+@@ -0,0 +1,595 @@
 +/****************************************************************************
 + * boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c
 + *
@@ -986,8 +986,8 @@ index 59516caf5b..bd9b573c46 100644
 +/* Hardware wiring (from your message):
 + *  T_CS  -> GPIO20
 + *  T_DIN -> GPIO10 (MOSI)
-+ *  T_DOUT-> GPIO7  (MISO)
-+ *  T_CLK -> GPIO8  (SCK)
++ *  T_DOUT-> GPIO7 (MISO)
++ *  T_CLK -> GPIO8 (SCK)
 + *  T_IRQ -> GPIO6 (IRQ required by nuttx driver )
 + *
 + * Note: SPI CS mapping is controlled by CONFIG_ESPRESSIF_SPI2_CSPIN or
@@ -1051,8 +1051,8 @@ index 59516caf5b..bd9b573c46 100644
 +
 +  /* Optionally configure the T_CS GPIO here if you're using software CS.
 +   * If hardware CS mapping is used (CONFIG_ESPRESSIF_SPI2_CSPIN == TSC_CS_GPIO)
-+   * the SPI driver will handle CS. If you use SWCS, ensure CONFIG_ESPRESSIF_SPI_SWCS
-+   * is enabled and configure the GPIO accordingly.
++   * the SPI driver will handle CS. If you use SWCS, ensure
++   * CONFIG_ESPRESSIF_SPI_SWCS is enabled and configure the GPIO accordingly.
 +   */
 +
 +  esp_configgpio(TSC_CS_GPIO, OUTPUT | PULLUP | DRIVE_2);
@@ -1136,4 +1136,425 @@ index 59516caf5b..bd9b573c46 100644
 +        return true;
 +    }
 +}
-\ No newline at end of file
++
++#ifndef Z_THRESHOLD
++#define Z_THRESHOLD 350
++#endif
++
++#define TOUCH_RAW_SAMPLE_COUNT 8
++#define TOUCH_RAW_ERROR 20
++
++static uint16_t touch_calibration_x0 = ADC_X_MIN;
++static uint16_t touch_calibration_x_span = ADC_X_MAX - ADC_X_MIN;
++static uint16_t touch_calibration_y0 = ADC_Y_MIN;
++static uint16_t touch_calibration_y_span = ADC_Y_MAX - ADC_Y_MIN;
++
++static bool touch_read_adc(uint8_t command, uint16_t *value)
++{
++    uint8_t buffer[2];
++    uint16_t result;
++
++    if (g_spi2_dev == NULL || value == NULL) {
++        return false;
++    }
++
++    SPI_SEND(g_spi2_dev, command);
++    up_udelay(3);
++    SPI_RECVBLOCK(g_spi2_dev, buffer, sizeof(buffer));
++
++    result = ((uint16_t)buffer[0] << 8) | buffer[1];
++    *value = result >> 4;
++
++    return true;
++}
++
++static bool touch_read_raw(uint16_t *raw_x, uint16_t *raw_y)
++{
++    bool result;
++
++    if (raw_x == NULL || raw_y == NULL || g_spi2_dev == NULL) {
++        return false;
++    }
++
++    SPI_LOCK(g_spi2_dev, true);
++    SPI_SETMODE(g_spi2_dev, SPIDEV_MODE0);
++    SPI_SETBITS(g_spi2_dev, 8);
++    SPI_SETFREQUENCY(g_spi2_dev, 1000000);
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), true);
++
++    result = touch_read_adc(GET_Y_CMD, raw_y);
++
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++    up_udelay(5);
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), true);
++
++    if (result) {
++        result = touch_read_adc(GET_X_CMD, raw_x);
++    }
++
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++    SPI_LOCK(g_spi2_dev, false);
++
++    if (!result || *raw_x == 0 || *raw_y == 0) {
++        return false;
++    }
++
++    return true;
++}
++
++static bool touch_is_pressed(void)
++{
++    uint16_t z1;
++    uint16_t z2;
++    uint32_t pressure;
++
++    if (g_spi2_dev == NULL) {
++        return false;
++    }
++
++    SPI_LOCK(g_spi2_dev, true);
++    SPI_SETMODE(g_spi2_dev, SPIDEV_MODE0);
++    SPI_SETBITS(g_spi2_dev, 8);
++    SPI_SETFREQUENCY(g_spi2_dev, 1000000);
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), true);
++
++    if (!touch_read_adc(0xB0, &z1)) {
++        SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++        SPI_LOCK(g_spi2_dev, false);
++        return false;
++    }
++
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++    up_udelay(5);
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), true);
++
++    if (!touch_read_adc(0xC0, &z2)) {
++        SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++        SPI_LOCK(g_spi2_dev, false);
++        return false;
++    }
++
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++    SPI_LOCK(g_spi2_dev, false);
++
++    if (z1 == 0 || z2 == 0) {
++        return false;
++    }
++
++    pressure = ((uint32_t)z1 * 4095U) / z2;
++    pressure += z1;
++
++    return pressure > Z_THRESHOLD;
++}
++
++static bool get_touch_raw_z(uint16_t *z)
++{
++    uint16_t z1;
++    uint16_t z2;
++    uint32_t pressure;
++
++    if (z == NULL || g_spi2_dev == NULL) {
++        return false;
++    }
++
++    SPI_LOCK(g_spi2_dev, true);
++    SPI_SETMODE(g_spi2_dev, SPIDEV_MODE0);
++    SPI_SETBITS(g_spi2_dev, 8);
++    SPI_SETFREQUENCY(g_spi2_dev, 1000000);
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), true);
++
++    if (!touch_read_adc(0xB0, &z1)) {
++        SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++        SPI_LOCK(g_spi2_dev, false);
++        return false;
++    }
++
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++    up_udelay(5);
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), true);
++
++    if (!touch_read_adc(0xC0, &z2)) {
++        SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++        SPI_LOCK(g_spi2_dev, false);
++        return false;
++    }
++
++    SPI_SELECT(g_spi2_dev, SPIDEV_TOUCHSCREEN(0), false);
++    SPI_LOCK(g_spi2_dev, false);
++
++    if (z1 == 0 || z2 == 0) {
++        *z = 0;
++        return true;
++    }
++
++    pressure = ((uint32_t)z1 * 4095U) / z2;
++    pressure += z1;
++
++    if (pressure > UINT16_MAX) {
++        pressure = UINT16_MAX;
++    }
++
++    *z = (uint16_t)pressure;
++    return true;
++}
++
++static bool valid_touch(uint16_t *raw_x, uint16_t *raw_y)
++{
++    uint16_t x1;
++    uint16_t y1;
++    uint16_t x2;
++    uint16_t y2;
++    uint16_t z;
++
++    if (raw_x == NULL || raw_y == NULL) {
++        return false;
++    }
++
++    if (!get_touch_raw_z(&z) || z <= Z_THRESHOLD) {
++        return false;
++    }
++
++    if (!touch_read_raw(&x1, &y1)) {
++        return false;
++    }
++
++    up_mdelay(1);
++
++    if (!get_touch_raw_z(&z) || z <= Z_THRESHOLD) {
++        return false;
++    }
++
++    up_mdelay(2);
++
++    if (!touch_read_raw(&x2, &y2)) {
++        return false;
++    }
++
++    if (abs((int)x1 - (int)x2) > TOUCH_RAW_ERROR ||
++        abs((int)y1 - (int)y2) > TOUCH_RAW_ERROR) {
++        return false;
++    }
++
++    *raw_x = (uint16_t)(((uint32_t)x1 + x2) / 2U);
++    *raw_y = (uint16_t)(((uint32_t)y1 + y2) / 2U);
++
++    return true;
++}
++
++static int32_t convert_axis(uint16_t raw,
++                            uint16_t minimum,
++                            uint16_t span,
++                            int32_t maximum)
++{
++    int32_t converted;
++
++    if (span == 0) {
++        return 0;
++    }
++
++    converted = ((int32_t)raw - minimum) * maximum / span;
++
++    if (converted < 0) {
++        converted = 0;
++    } else if (converted > maximum) {
++        converted = maximum;
++    }
++
++    return converted;
++}
++
++static void convert_raw_xy(uint16_t raw_x,
++                           uint16_t raw_y,
++                           int32_t *x,
++                           int32_t *y)
++{
++    if (x == NULL || y == NULL) {
++        return;
++    }
++
++    *x = convert_axis(raw_x,
++                      touch_calibration_x0,
++                      touch_calibration_x_span,
++                      SCREEN_WIDTH - 1);
++
++    *y = convert_axis(raw_y,
++                      touch_calibration_y0,
++                      touch_calibration_y_span,
++                      SCREEN_HEIGHT - 1);
++}
++
++static void wait_for_touch(void)
++{
++  uint16_t x,y;
++    while (!valid_touch(&x, &y)) {
++        up_mdelay(1);
++    }
++    //printf("   received.\n");
++
++}
++
++static void wait_for_touch_release(void)
++{
++    uint16_t z;
++
++    while (get_touch_raw_z(&z) && z > Z_THRESHOLD) {
++        up_mdelay(10);
++    }
++}
++
++bool esp32c3_xiao_get_valid_touch(uint16_t *x, uint16_t *y)
++{
++
++    if (x == NULL || y == NULL) {
++        return false;
++    }
++    uint32_t touchtimes = 5;
++    bool valid = false;
++
++
++    while (touchtimes--)
++    {
++      if (valid_touch(x, y)) {
++        valid++;
++      }
++    }
++    if (valid < 1) {
++      return false;
++    }
++
++    return true;
++}
++
++/* Use this function to get x,y coordinates */
++/* Get calibrated x,y coordinates */
++bool esp32c3_xiao_get_touch(int32_t *x, int32_t *y)
++{
++    uint16_t raw_x;
++    uint16_t raw_y;
++
++    if (x == NULL || y == NULL) {
++        return false;
++    }
++    uint32_t touchtimes = 5;
++    bool valid = false;
++
++
++    while (touchtimes--)
++    {
++      if (valid_touch(&raw_x, &raw_y)) {
++        valid++;
++      }
++    }
++    if (valid < 1) {
++      return false;
++    }
++
++    convert_raw_xy(raw_x, raw_y, x, y);
++    return true;
++}
++
++
++bool esp32c3_xiao_calibrate_touch_point(uint16_t * point)
++{
++  uint32_t sum_x = 0;
++  uint32_t sum_y = 0;
++
++  //printf("   wait for touch...\n");
++  wait_for_touch();
++
++  for (int sample = 0; sample < TOUCH_RAW_SAMPLE_COUNT; sample++) {
++      //printf("sample :%d\n", sample);
++      uint16_t raw_x;
++      uint16_t raw_y;
++
++      esp32c3_xiao_get_valid_touch(&raw_x, &raw_y);
++      sum_x += raw_x;
++      sum_y += raw_y;
++  }
++
++  wait_for_touch_release();
++  //printf("   released.\n");
++
++  point[0] =
++      (uint16_t)(sum_x / TOUCH_RAW_SAMPLE_COUNT);
++  point[1] =
++      (uint16_t)(sum_y / TOUCH_RAW_SAMPLE_COUNT);
++
++  return true;
++}
++
++bool esp32c3_xiao_finalize_calibration(uint16_t *tl, uint16_t *tr, uint16_t *bl, uint16_t *br, bool invert_x, bool invert_y, uint16_t *cal_data)
++{
++    uint32_t left_x;
++    uint32_t right_x;
++    uint32_t top_y;
++    uint32_t bottom_y;
++    uint16_t x_span;
++    uint16_t y_span;
++
++    left_x = ((uint32_t)tl[0] + bl[0]) / 2U;
++    right_x = ((uint32_t)tr[0] + br[0]) / 2U;
++    top_y = ((uint32_t)tl[1] + tr[1]) / 2U;
++    bottom_y = ((uint32_t)bl[1] + br[1]) / 2U;
++
++    if (invert_x) {
++      right_x = ((uint32_t)tl[0] + bl[0]) / 2U;
++      left_x = ((uint32_t)tr[0] + br[0]) / 2U;
++    }
++    if (invert_y) {
++      bottom_y = ((uint32_t)tl[1] + tr[1]) / 2U;
++      top_y = ((uint32_t)bl[1] + br[1]) / 2U;
++    }
++
++    if (right_x <= left_x || bottom_y <= top_y) {
++        return false;
++    }
++
++    x_span = (uint16_t)(right_x - left_x);
++    y_span = (uint16_t)(bottom_y - top_y);
++
++    if (x_span == 0 || y_span == 0) {
++        return false;
++    }
++
++    touch_calibration_x0 = (uint16_t)left_x;
++    touch_calibration_x_span = x_span;
++    touch_calibration_y0 = (uint16_t)top_y;
++    touch_calibration_y_span = y_span;
++
++    /*
++     * Store:
++     *   cal_data[0] = raw X minimum
++     *   cal_data[1] = raw X span
++     *   cal_data[2] = raw Y minimum
++     *   cal_data[3] = raw Y span
++     */
++
++    cal_data[0] = touch_calibration_x0;
++    cal_data[1] = touch_calibration_x_span;
++    cal_data[2] = touch_calibration_y0;
++    cal_data[3] = touch_calibration_y_span;
++
++    return true;
++
++}
++
++void esp32c3_xiao_set_touch_calibration(const uint16_t *cal_data)
++{
++    if (cal_data == NULL) {
++        return;
++    }
++
++    touch_calibration_x0 = cal_data[0];
++    touch_calibration_x_span = cal_data[1];
++    touch_calibration_y0 = cal_data[2];
++    touch_calibration_y_span = cal_data[3];
++
++    if (touch_calibration_x_span == 0) {
++        touch_calibration_x_span = 1;
++    }
++
++    if (touch_calibration_y_span == 0) {
++        touch_calibration_y_span = 1;
++    }
++}

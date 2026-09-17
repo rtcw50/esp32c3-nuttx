@@ -11,11 +11,15 @@
 #include <nuttx/video/fb.h>
 #include "watch_cleaner_controller.h"
 
+/* Defines */
+#define SCREEN_HEIGHT 240
+
 /* Global Variables */
-uint16_t g_time_remaining; // Used to track time remaining in operation  
+extern bool g_force_calibration;
 
 /* External Prototypes */
 bool esp32c3_xiao_tsc_get_xy(int *x, int *y);
+bool esp32c3_xiao_get_touch(int32_t *x, int32_t *y);
 
 /* Local Prototypes */
 static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data);
@@ -28,12 +32,13 @@ static mqd_t tel_q;
 /* Local wrapper callback that satisfies LVGL structure requirements */
 static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data)
 {
-    int x = 0;
-    int y = 0;
+    int32_t x = 0;
+    int32_t y = 0;
 
-    if (esp32c3_xiao_tsc_get_xy(&x, &y)) {
+    if (esp32c3_xiao_get_touch(&x, &y)) {
+//    if (esp32c3_xiao_tsc_get_xy(&x, &y)) {
         data->point.x = x;
-        data->point.y = 240-y;
+        data->point.y = SCREEN_HEIGHT-y;
         data->state = LV_INDEV_STATE_PRESSED;
 //        printf("X: %d Y: %d\n", x, y);
     } else {
@@ -106,13 +111,20 @@ int wcc_gui_task(int argc, char *argv[])
 
     /* Build UI on the active screen created by lv_nuttx_init */
     wcc_init_styles();
+
     wcc_create_main_screen_widgets(&cmd_q, &tel_q);
+    wcc_create_settings();
+    wcc_create_calibration_screen();
+
+    /* Check for calibration requirements */
+    wcc_calibration_setup(g_force_calibration);
+    g_force_calibration = false;
 
 
     /* Main Execution Loop */
     //printf("watch_cleaner: Enter main gui loop...\n");
     while (1) {
-//        printf ("watch_cleaner: gui loop iteration...\n");
+        //printf ("watch_cleaner: gui loop iteration...\n");
         uint32_t time_till_next = lv_timer_handler();
         
         /* Clamp sleep time to avoid integer overflow when no timer is pending */

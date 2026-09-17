@@ -19,7 +19,7 @@ static mqd_t motor_send_q;
 static int handle_ui_command(struct clean_cmd_msg_s *cmd); 
 static void motorcontroller_init(void);
 
-static void motorcontroller_init() {
+static void motorcontroller_init(void) {
     // Initialize the motor controller
     if (wcc_motor_driver_init() != 0) {
         printf("watch_cleaner: Motor driver initialization failed\n");
@@ -101,6 +101,3 @@ static int handle_ui_command(struct clean_cmd_msg_s *cmd)
     }                                                                                
     return 0;                                                                        
 }                                                                                    
-
-
-

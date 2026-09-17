@@ -190,8 +190,16 @@ static void start_button_event_cb(lv_event_t * event)
   // When the pause button is clicked, it changes to the play symbol and the motor pauses. 
   // When the play button is clicked, it changes to the pause symbol and the motor resumes running.
   // The separate stop button can be used to stop the motor and reset to ready to start state.
+  #if 0
+  if (code == LV_EVENT_LONG_PRESSED) {
+    /* To keep the on state style of the button */
+    lv_obj_set_state(button, LV_STATE_CHECKED, true);
+    wcc_calibration_setup(true);
+    return;
+  }
+  #endif
 
-  if (code == LV_EVENT_VALUE_CHANGED) {
+  if (code == LV_EVENT_SHORT_CLICKED) {
     if (BUTTON_LABEL_IS(lv_label_get_text(label), LV_SYMBOL_PLAY LV_SYMBOL_PAUSE)) {
       /* Start a cycle, button changes to pause symbol*/
       lv_label_set_text(label,LV_SYMBOL_PAUSE);
@@ -202,9 +210,6 @@ static void start_button_event_cb(lv_event_t * event)
       g_duration = get_duration(g_operating_mode);
       g_agitate_interval_duration = get_agitate_interval_duration();
       g_countdown_in_sec = g_duration;
-
-      /* Send motor ramp up sequence */
-      //send_motor_sequence(get_duty_cycle());
 
       /* Create and start the 1 second tick timer*/
       g_one_sec_timer = lv_timer_create(one_sec_timer_expiry_cb, 1 * MC_MS_PER_SEC, NULL);
@@ -392,7 +397,7 @@ static void create_machine_status(lv_obj_t * scr)
 extern "C" void wcc_create_main_screen_widgets(mqd_t * send_q, mqd_t * receive_q)
 {
     /* Build UI on the active screen created by lv_nuttx_init */
-    main_screen = lv_screen_active(); // or lv_scr_act()
+    main_screen = lv_obj_create(NULL); 
     LV_ASSERT(main_screen != NULL);
     ui_send_q = *send_q;
     ui_receive_q = *receive_q;
@@ -400,7 +405,8 @@ extern "C" void wcc_create_main_screen_widgets(mqd_t * send_q, mqd_t * receive_q
     wcc_set_screen_bg_style(main_screen);
 
     /* Create the settings screen */
-    wcc_create_settings();
+    //wcc_create_settings();
+
 
 
     (void)wcc_create_title_bar(main_screen, "Watch Cleaner Controller " WCC_VER);

@@ -7,6 +7,14 @@
 #include <lvgl/lvgl.h>
 #include <time.h>
 
+/* Persistent storage defines */
+/* Persistent storage */
+#define LFS_MOUNT_POINT "/mnt/lfs"
+#define LFS_DEV_PATH "/dev/mtdblock0"
+#define CAL_DATA_PATH LFS_MOUNT_POINT "/cal_data.bin"
+#define SETTINGS_DATA_PATH LFS_MOUNT_POINT "/settings_data.bin"
+
+
 /* UI to Motor message defines */
 #define MSG_ACTION_PWM_START 0
 #define MSG_ACTION_PWM_STOP 1   
@@ -43,6 +51,7 @@
 #define MSG_ACTION_TYPE 1
 
 
+/* Struct definitions */
 struct clean_cmd_msg_s {
     uint16_t msg_type;              /* MSG_SET_TYPE or MSG_ACTION_TYPE*/
     union {
@@ -57,6 +66,9 @@ struct clean_tel_msg_s {
         uint16_t message_id;     /* If MOTOR_MESSAGE is received */
     };
 };
+
+
+
 
 /* GUI elements*/
 #define WCC_VER "1.0"
@@ -171,6 +183,9 @@ extern "C" {
     void wcc_handle_motor_telemetry(void);
     void wcc_create_settings(void);
     void wcc_init_styles(void);
+    void wcc_create_calibration_screen(void);
+    void wcc_calibration_setup(bool force_calibration);
+    lv_obj_t * wcc_get_calibration_screen(void);
 #ifdef __cplusplus
 }
 #endif // __cplusplus

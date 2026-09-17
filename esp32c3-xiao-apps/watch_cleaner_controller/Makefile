@@ -35,7 +35,7 @@ MAINSRC = watch_cleaner_controller_main.c
 
 CXXEXT = .cpp
 CSRCS +=  motorcontroller.c motor_driver.c util.c gui.c
-CXXSRCS += wcc_main_screen.cpp wcc_settings.cpp wcc_styles.cpp
-MODULE_OBJS = watch_cleaner_controller_main.o motorcontroller.o motor_driver.o util.o gui.o wcc_main_screen.o wcc_settings.o wcc_styles.o
+CXXSRCS += wcc_main_screen.cpp wcc_settings.cpp wcc_styles.cpp wcc_calibration.cpp
+MODULE_OBJS = watch_cleaner_controller_main.o motorcontroller.o motor_driver.o util.o gui.o wcc_main_screen.o wcc_settings.o wcc_styles.o wcc_calibration.o
 
 include $(APPDIR)/Application.mk
