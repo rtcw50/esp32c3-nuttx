@@ -77,111 +77,24 @@ This will also build the apps/examples/gpio program.
 In order to understand what pin /dev/gpio0 and /dev/gpio1 map to, there has to
 be modifications to the esp32c3-xiao board files. These are located at 
 nuttx/boards/risc-v/esp32c3/esp32c3-xiao. The files modified are include/board.h
-and src/esp32c3_gpio.c. Here are the changes: 
+and src/esp32c3_gpio.c. 
 
+## Tracking changes to nuttx and apps
+In the process of building custom apps for the esp32c3-xiao device, I found myself
+making a few customizations especially to the nuttx/boards/risc-v/esp32c3/esp32c3-xiao files
+and directories. Rather than fork both the nuttx and apps directories, I chose to simply
+create git diff patches for all the changes required in nuttx or apps. I created
+two scripts, make_apps_patch.sh and make_nuttx_patch.sh to capture the changes relative to 
+the pristine nuttx and apps baselines. Theoretically, the patch will apply seamlessly if the
+correct version of nuttx and apps is cloned locally. The changes are captured in 
+diff format as nuttx.patch and apps.patch. 
 
-```
-diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
-index 4ffe981e72..b19d59fe94 100644
---- a/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
-+++ b/boards/risc-v/esp32c3/esp32c3-xiao/include/board.h
-@@ -27,10 +27,11 @@
-  * Pre-processor Definitions
-  ****************************************************************************/
- 
-+/* Testing */
- /* GPIO pins used by the GPIO Subsystem */
- 
--#define BOARD_NGPIOOUT    1 /* Amount of GPIO Output pins */
--#define BOARD_NGPIOINT    1 /* Amount of GPIO Input w/ Interruption pins */
-+#define BOARD_NGPIOOUT    10 /* Amount of GPIO Output pins */
-+#define BOARD_NGPIOINT    1   /* Amount of GPIO Input w/ Interruption pins */
- 
- #endif /* __BOARDS_RISCV_ESP32C3_ESP32C3_XIAO_INCLUDE_BOARD_H */
- 
-diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
-index 78fe996097..dccd1e7b77 100644
---- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
-+++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_gpio.c
-@@ -64,6 +64,30 @@
- 
- #define GPIO_OUT1  3
- 
-+/* GPIO2 is reserved as an IRQ PIN, do not use it for IO */
-+#define GPIO3 3
-+#define GPIO4 4
-+#define GPIO5 5
-+#define GPIO6 6
-+#define GPIO7 7
-+#define GPIO21 21
-+#define GPIO20 20
-+#define GPIO8 8
-+#define GPIO9 9
-+#define GPIO10 10
-+/* We refer to pins by their Dx names in Arduino, so do it here */
-+#define D1 GPIO3
-+#define D2 GPIO4
-+#define D3 GPIO5
-+#define D4 GPIO6
-+#define D5 GPIO7
-+#define D6 GPIO21
-+#define D7 GPIO20
-+#define D8 GPIO8
-+#define D9 GPIO9
-+#define D10 GPIO10
-+
-+
- #if !defined(CONFIG_ESPRESSIF_GPIO_IRQ) && BOARD_NGPIOINT > 0
- #  error "NGPIOINT is > 0 and GPIO interrupts aren't enabled"
- #endif
-@@ -73,6 +97,7 @@
-  */
- 
- #define GPIO_IRQPIN  2
-+#define D0 GPIO_IRQPIN
- 
- /****************************************************************************
-  * Private Types
-@@ -128,7 +153,17 @@ static const struct gpio_operations_s gpout_ops =
- 
- static const uint32_t g_gpiooutputs[BOARD_NGPIOOUT] =
- {
--  GPIO_OUT1
-+/*  GPIO_OUT1 */
-+D1, /* /dev/gpio0 */
-+D2,
-+D3,
-+D4,
-+D5,
-+D6,
-+D7,
-+D8,
-+D9,
-+D10   /* /dev/gpio9 */ 
- };
- 
- static struct espgpio_dev_s g_gpout[BOARD_NGPIOOUT];
- ```
-
- I don't know of a way to pull these changes out of tree. Perhaps
- creating a new custom board and populating it would work. For now,
- accept that you need to customize the files in nuttx work tree.
-
- What were doing here is adding 10 of the 11 esp32c3 xiao GPIO pins
- to the /dev/gpio tree. D0 is already set to be an interrupt pin, so
- I left that one out as an output. Once the nsh is running, 'ls /dev'
- should show gpio0..9 and gpio10. gpio10 will be the interrupt input
- pin. It would have been nice to have the /dev names correspond to the 
- esp32c3 xiao pinout, and you can do that with an additional mapping
- of pin numbers for xiao in the gpio_pin_register() call. But for now,
- it just uses the ordinal count of the pins to set the /dev/gpio number.
-
- When you select the "blink" application in make menuconfig, it will build
- along with the other selected apps.  Flashing to the board is done with:
- esptool -c esp32c3 -p /dev/ttyACM0 -b 115200 write-flash -fs 4MB -fm dio -ff 80m 0x0000 nuttx.bin
-
-Run blink in the nsh and the red and blue LEDs with alternate flashing.
-
+## The Critical nuttx configuration
+Additionally, I save the defconfig file created by (in nuttx) 'make savedefconfig'. This 
+crucial file captures the key configuration changes needed by the applications in the 
+custom esp32c3-xiao-apps directory, especially the 'watch_cleaner_controller' app.
+There are a lot of customization required for 'watch_cleaner_controller' due to the 
+use of PWM, touch input devices, LCD displays, and GPIOs.
 
 
 ## 21 Apr 2026 The ZenC Experiment
@@ -346,7 +259,10 @@ This seems to work fine.
 Was there any advantage to using C3 for the blink program?
 Really not much in this simple program. Using optionals 
 to open files was cool and using defer to close files was
-helpful. Other than that, it looks like C.
+helpful. Other than that, it looks like C. I may come back to c3
+in the future. One downside is that given agentic programming
+is taking over the software developer world, it is not clear
+whether the LLM's are sufficiently trained on C3. 
 
 ## Back to the Motor Controller
 
@@ -439,6 +355,11 @@ To restart the program
 Since we are executing from flash memory, normal breakpoints won't
 work since that implies rewriting the instruction at the breakpoint.
 You have a limited number of hardware breakpoints, so don't go crazy.
+
+Also, since we are still compiling with optimizations, stepping using 'step'
+and 'next' don't always work as expected. I found that setting temporary
+breakpoint (use thb file:linenum) works better for executing through your 
+code.
 
 ### picocom
 The picocom command is:
@@ -590,6 +511,113 @@ mylvgl: display wrapper initialized successfully
 mylvgl: Enter main loop...
 
 but the label display is still working. 
+
+## LVGL Part 3
+
+My notes show me struggling to get a simple text widget to render
+on the ILI9341 display from July 18 to Aug 3 of 2026. Most of the
+issues were due to me following some bad advice from Gemini to 
+use the nuttx /dev/fb0 device. Eventually I reverted to the 
+/dev/lcd0 device configuration and after playing around with
+some configuration settings I was able to display a text widget
+on my hardware on Aug 3. There was a lot of experimentation 
+with the configurations and the SPI2 peripheral. I think I found
+a couple of wiring issues with the logic analyzer also. 
+
+After I was satified that I could render LVGL widgets, then I had
+to try to enable the touch screen support. Again I went down a 
+couple of rabbit holes using the touch IRQ pin. It turned out that
+using the IRQ pin (from the display) to indicate a touch occurred
+was a bad idea. It got into some complicated work queue structures
+and ultimately ended up in a recursive loop because the IRQ would
+continously fire. Switching to the /dev/input0 mode (polls for 
+touches to the screen) ended up being much simpler.
+
+## Porting the Motor Controller
+
+On Aug 26, I finally was ready to port the textUI version of
+motor controller to LVGL. I start with simple start and stop
+buttons. This worked fine. The PWM devices were working now
+and LVGL as the GUI platform was working.
+
+I set up two nuttx tasks, one for the GUI and one for the
+motor controller. The initial design followed the textUI's 
+version where the motor controller was responsible for the
+the motor duration timing and the motor reverse timing.
+A send/receive communication queue was set up between the
+tasks so the GUI could send messages to start and stop
+to the motor. The motor would respond with motor and time
+remaining to the GUI. Unfortunately, this design did not
+work well in a single 160Mhz core chip. The GUI was not
+responsive at all as the motor task needed to do too much
+work keeping track of deadlines to reverse and stop the 
+motor. I had to redesign what the motor task was responsible
+for doing.
+
+The final design had the GUI doing the motor timing via 
+a single timer that had a one second expiry interval. When
+the start button was hit, the GUI sent a message to a 
+blocked motor controller to start. The motor control would
+then start the motor and block waiting (using virtually no
+cycles). When time was up or a reverse was needed, the GUI
+sent the motor controller a message to stop or reverse.
+
+The whole redesign happened between about Aug 26 and Sept 9.
+
+## OpenRouter, Aider and Using LLMs.
+
+Up until about the beginning of September, I was asking Gemini basic
+design questions and sometimes posting my code to Gemini free.
+
+In order to step up the AI assisted coding ladder, I created an
+OpenRouter account and posted a $20 deposit. OpenRouter gives you
+a "generic" model API which it then forwards to any one of a number
+of different models. The charges for each model you use is deducted from your
+account based on the number of input and output tokens you use. Some
+models are more expensive than others. There's a "auto" mode in OpenRouter
+which selects the most appropriate model based on contents of the prompt.
+
+Additionally, I used a tool called Aider, which is text based AI coding 
+assistant. It builds a map of your repository and it can see your code and
+pass the essential context to the models to assist with coding. It will
+change your files if you ask it to. I mainly asked questions in ask mode
+but did have it generate the "preset" code for 'watch_cleaner_controller'.
+It did a pretty good job. It did refactor some things I wish it would have
+left alone, but the code was good and worked. In 3 weeks, I spent $4.10 and
+used 9.17M tokens. It seems to favor GPT Luna-5.6 for code generation.
+You can set Aider to use specific models, but this can get more expensive.
+I hardcoded Gemini Flash 3.8 for a while, but I didn't think it did a
+significantly better job.
+
+## The Final Bits
+
+The motor controller was working now and the two final bits of
+polish I wanted was a touch calibration routine similar to what
+what done for the TFT_eSPI code in the Arduino version of watch cleaner
+controller. I copied the Arduino code into the nuttx version and
+asked Aider to port it. After quite a bit of back and forth, I
+was able to get a touch calibration done and saved into a local
+flash file system.
+
+The last feature was to add preset buttons to the application. 
+These are 3 sets of parameters to control the durations and 
+speed of the motor. The requirement was to be customizable also.
+That is, to allow the user to save their own profile settings
+to one of the 3 preset buttons. Aider did almost all of the 
+coding here based on my extensive prompt.
+
+Finally, I spent some time cleaning up the visual details of the
+GUI interface. The colors are not right on my test display. It is
+suppose to be an RGB display, but the G displays as blue and the B
+displays as green. When the app is loaded onto the final hardware,
+I'll have to determine if this was a software issue or just a bad
+display.
+
+## Loading the App to the Machine
+
+TBD.
+
+ 
 
 
 

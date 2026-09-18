@@ -432,24 +432,24 @@ index 78fe996097..30dbf7d5db 100644
        /* Configure the pins that will be used as output */
  
 diff --git a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c
-index 941416fbda..d6650cc820 100644
+index 941416fbda..6b90a93218 100644
 --- a/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c
 +++ b/boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c
-@@ -2,10 +2,12 @@
+@@ -1,19 +1,18 @@
+ #include <nuttx/config.h>
  #include <errno.h>
  #include <syslog.h>
- 
-+
+-
++#include <nuttx/arch.h>
  #include <nuttx/lcd/lcd.h>
  #include <nuttx/lcd/ili9341.h>
  #include <nuttx/spi/spi.h>
 -#include <nuttx/video/fb.h>
-+//#include <nuttx/video/fb.h>
 +#include <nuttx/lcd/lcd_dev.h>
  #include <arch/board/board.h> 
  
  #include "espressif/esp_spi.h"
-@@ -13,7 +15,7 @@
+-#include "esp_board_spidev.h"
  #include "espressif/esp_gpio.h"
  
  static struct lcd_dev_s *g_lcd;
@@ -458,7 +458,7 @@ index 941416fbda..d6650cc820 100644
  
  struct esp32c3_xiao_lcd_s
  {
-@@ -115,6 +117,7 @@ static int board_lcd_ioctl(FAR struct lcd_dev_s *dev, int cmd, unsigned long arg
+@@ -115,6 +114,7 @@ static int board_lcd_ioctl(FAR struct lcd_dev_s *dev, int cmd, unsigned long arg
      }
  }
  
@@ -466,7 +466,7 @@ index 941416fbda..d6650cc820 100644
  int esp32c3_xiao_lcd_initialize(void)
  {
  
-@@ -136,6 +139,7 @@ int esp32c3_xiao_lcd_initialize(void)
+@@ -136,6 +136,7 @@ int esp32c3_xiao_lcd_initialize(void)
  
    return OK;
  }
@@ -474,7 +474,7 @@ index 941416fbda..d6650cc820 100644
  
  int board_lcd_initialize(void)
  {
-@@ -149,6 +153,7 @@ int board_lcd_initialize(void)
+@@ -149,6 +150,7 @@ int board_lcd_initialize(void)
        return -ENODEV;
    }
  
@@ -482,7 +482,7 @@ index 941416fbda..d6650cc820 100644
    priv.ili9341.select    = esp32c3_xiao_lcd_select;
    priv.ili9341.deselect  = esp32c3_xiao_lcd_deselect;
    priv.ili9341.sendcmd   = esp32c3_xiao_lcd_sendcmd;
-@@ -182,6 +187,21 @@ int board_lcd_initialize(void)
+@@ -182,6 +184,21 @@ int board_lcd_initialize(void)
  
      /* Deliver power to the display controller */
    g_lcd->setpower(g_lcd, CONFIG_LCD_MAXPOWER);
@@ -599,7 +599,7 @@ index 59516caf5b..bd9b573c46 100644
  ifeq ($(CONFIG_WINDOWS_NATIVE),y)
  define CLEAN
  	$(Q) if exist *$(OBJEXT) (del /f /q *$(OBJEXT))
---- /dev/null	2026-08-07 18:21:01.854467679 -0500
+--- /dev/null	2026-07-28 10:04:45.780954400 -0500
 +++ tools/Zenc.defs	2026-04-24 19:03:53.837547984 -0500
 @@ -0,0 +1,26 @@
 +############################################################################
@@ -628,7 +628,7 @@ index 59516caf5b..bd9b573c46 100644
 +
 +ZENCFLAGS := transpile -q --hide-symbols 
 +
---- /dev/null	2026-08-07 18:21:01.854467679 -0500
+--- /dev/null	2026-07-28 10:04:45.780954400 -0500
 +++ tools/C3.defs	2026-06-01 08:17:35.641172740 -0500
 @@ -0,0 +1,48 @@
 +############################################################################
@@ -680,23 +680,20 @@ index 59516caf5b..bd9b573c46 100644
 +    riscv-none-elf-nm $1 | awk '$$2 == "w" || $$2 == "W" {printf " -u %s", $$3 } $$1 == "w" {printf " -u %s", $$2}' > $(APPDIR)$(DELIM)c3_ldflags/$(PROGNAME).ldflags 
 +endef
 \ No newline at end of file
---- /dev/null	2026-08-07 18:21:01.854467679 -0500
-+++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c	2026-08-07 15:48:51.032751100 -0500
-@@ -0,0 +1,227 @@
+--- /dev/null	2026-07-28 10:04:45.780954400 -0500
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_lcd.c	2026-09-18 15:20:28.726220632 -0500
+@@ -0,0 +1,224 @@
 +#include <nuttx/config.h>
 +#include <errno.h>
 +#include <syslog.h>
-+
-+
++#include <nuttx/arch.h>
 +#include <nuttx/lcd/lcd.h>
 +#include <nuttx/lcd/ili9341.h>
 +#include <nuttx/spi/spi.h>
-+//#include <nuttx/video/fb.h>
 +#include <nuttx/lcd/lcd_dev.h>
 +#include <arch/board/board.h> 
 +
 +#include "espressif/esp_spi.h"
-+#include "esp_board_spidev.h"
 +#include "espressif/esp_gpio.h"
 +
 +static struct lcd_dev_s *g_lcd;
@@ -910,7 +907,7 @@ index 59516caf5b..bd9b573c46 100644
 +      return NULL;
 +    }
 +} 
---- /dev/null	2026-08-07 18:21:01.854467679 -0500
+--- /dev/null	2026-07-28 10:04:45.780954400 -0500
 +++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_xiao_spi.c	2026-08-05 14:14:39.109342941 -0500
 @@ -0,0 +1,47 @@
 +#include <nuttx/config.h>
@@ -960,7 +957,7 @@ index 59516caf5b..bd9b573c46 100644
 +    }
 +
 +}   
---- /dev/null	2026-08-07 18:21:01.854467679 -0500
+--- /dev/null	2026-07-28 10:04:45.780954400 -0500
 +++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-09-17 13:58:43.800221290 -0500
 @@ -0,0 +1,595 @@
 +/****************************************************************************

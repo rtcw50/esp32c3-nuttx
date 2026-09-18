@@ -1,17 +1,20 @@
 /*
  * File: wcc_settings.cpp
- * Author: John
- * Date: 2025-11-14
  * Description:
- *   Implementation of settings management for the Watch Cleaner Controller (WCC).
- *   This file will contain functions to load, save, and validate configuration
- *   parameters for the ESP32-based WCC project.
+ *   Settings management and persistent preset support for the
+ *   Watch Cleaner Controller.
  */
+
 #include <lvgl/lvgl.h>
 #include <lvgl/src/others/observer/lv_observer.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include "lvgl/src/core/lv_obj.h"
+#include "lvgl/src/core/lv_obj_scroll.h"
+#include "lvgl/src/misc/lv_area.h"
 #include "watch_cleaner_controller.h"
 
-/* Enum for data binding types */
 typedef enum {
     WCC_CLEAN = 0,
     WCC_RINSE,
@@ -21,399 +24,601 @@ typedef enum {
     WCC_SPINUP
 } wcc_data_binding_info_t;
 
-
- /* Structs */
- typedef struct data_binding_info {
-    lv_subject_t * subject; /**< Pointer to the subject associated with this data binding */
+typedef struct data_binding_info {
+    lv_subject_t *subject;
     int32_t default_value;
     int32_t max_value;
-    int32_t update_increment; 
+    int32_t update_increment;
     lv_observer_cb_t label_updater;
- } data_binding_info;
+} data_binding_info;
 
-/* Externs */
+typedef struct wcc_preset_values {
+    int32_t clean_duration;
+    int32_t rinse_duration;
+    int32_t spin_duration;
+    int32_t agitate_duration;
+    int32_t rpm;
+    int32_t ramp_factor;
+} wcc_preset_values_t;
+
+typedef struct wcc_preset_file {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t count;
+    wcc_preset_values_t values[WCC_PRESET_COUNT];
+} wcc_preset_file_t;
+
+static const uint32_t WCC_PRESET_FILE_MAGIC = 0x57434350UL;
+static const uint16_t WCC_PRESET_FILE_VERSION = 2;
+static wcc_preset_values_t presets[WCC_PRESET_COUNT];
+static uint8_t selected_preset;
+static bool presets_loaded;
+
 extern enum OperatingMode g_operating_mode;
+extern lv_style_t transparent_button_style;
+extern lv_style_t on_button_style;
+extern lv_style_t off_button_style;
+extern lv_style_t duration_button_style;
 
-/* Globals/Statics */
-lv_obj_t * settings_screen;
-static lv_obj_t * return_to_main_button;
+lv_obj_t *settings_screen;
+
+static lv_obj_t *return_to_main_button;
+static lv_obj_t *settings_preset_buttons[WCC_PRESET_COUNT];
+static lv_obj_t *main_preset_buttons[WCC_PRESET_COUNT];
 
 lv_subject_t clean_duration_int_subject;
 lv_subject_t rinse_duration_int_subject;
 lv_subject_t spin_duration_int_subject;
 lv_subject_t agitate_duration_int_subject;
 lv_subject_t rpm_int_subject;
-lv_subject_t ramp_factor_int_subject; 
+lv_subject_t ramp_factor_int_subject;
 
 pwm_info pwm_values;
 
-/* Local prototypes */
+
 static void update_duration_cb(lv_observer_t *, lv_subject_t *);
 static void update_agitate_interval_cb(lv_observer_t *, lv_subject_t *);
 static void update_ramp_factor_cb(lv_observer_t *, lv_subject_t *);
 static void update_rpm_value_cb(lv_observer_t *, lv_subject_t *);
 
-
 static data_binding_info dbi[] = {
-    { 
-        .subject = &clean_duration_int_subject,
-        .default_value = CLEAN_DUR_DEFAULT,
-        .max_value = CLEAN_DUR_MAX,
-        .update_increment = 30,
-        .label_updater = update_duration_cb,
-    },
-    { 
-        .subject = &rinse_duration_int_subject,
-        .default_value = RINSE_DUR_DEFAULT,
-        .max_value = RINSE_DUR_MAX,
-        .update_increment = 10,
-        .label_updater = update_duration_cb,
-    },
-    { 
-        .subject = &spin_duration_int_subject,
-        .default_value = SPIN_DUR_DEFAULT,
-        .max_value = SPIN_DUR_MAX,
-        .update_increment = 10,
-        .label_updater = update_duration_cb,
-    },
-    { 
-        .subject = &agitate_duration_int_subject,
-        .default_value = AGITATE_DUR_DEFAULT,
-        .max_value = AGITATE_DUR_MAX,
-        .update_increment = 1,
-        .label_updater = update_agitate_interval_cb,
-    },
-    { 
-        .subject = &rpm_int_subject,
-        .default_value = RPM_DEFAULT,
-        .max_value = RPM_MAX,
-        .update_increment = 50,
-        .label_updater = update_rpm_value_cb,
-    },
-    { 
-        .subject = &ramp_factor_int_subject,
-        .default_value = RAMP_FACTOR_DEFAULT,
-        .max_value = RAMP_FACTOR_MAX,
-        .update_increment = 1,
-        .label_updater = update_ramp_factor_cb,
-    }
+    { &clean_duration_int_subject, CLEAN_DUR_DEFAULT, CLEAN_DUR_MAX, 30,
+      update_duration_cb },
+    { &rinse_duration_int_subject, RINSE_DUR_DEFAULT, RINSE_DUR_MAX, 10,
+      update_duration_cb },
+    { &spin_duration_int_subject, SPIN_DUR_DEFAULT, SPIN_DUR_MAX, 10,
+      update_duration_cb },
+    { &agitate_duration_int_subject, AGITATE_DUR_DEFAULT, AGITATE_DUR_MAX, 1,
+      update_agitate_interval_cb },
+    { &rpm_int_subject, RPM_DEFAULT, RPM_MAX, 50, update_rpm_value_cb },
+    { &ramp_factor_int_subject, RAMP_FACTOR_DEFAULT, RAMP_FACTOR_MAX, 1,
+      update_ramp_factor_cb }
 };
 
- /* Externs */
-extern lv_obj_t * main_screen;
 extern lv_style_t transparent_button_style;
-
-/* Public functions */
-void wcc_create_settings(void);
-lv_obj_t * wcc_get_settings_screen(void);
-
-/* Local Prototypes*/
-static void return_to_main_button_event_cb(lv_event_t * event);
-static void up_button_event_cb(lv_event_t * event);
-static void down_button_event_cb(lv_event_t * event);
+extern lv_style_t on_button_style;
+extern lv_style_t off_button_style;
 
 
-static void return_to_main_button_event_cb(lv_event_t * event)
-{
-  lv_event_code_t code = lv_event_get_code(event);
+static void set_default_preset_values(uint8_t preset_index,   
+                                      wcc_preset_values_t  *values)                                                      
+{                                                             
+    switch (preset_index) {                                   
+    case 0:                                                   
+        values->clean_duration = CLEAN_DUR_DEFAULT;           
+        values->rinse_duration = RINSE_DUR_DEFAULT;           
+        values->spin_duration = SPIN_DUR_DEFAULT;             
+        values->agitate_duration = AGITATE_DUR_DEFAULT;       
+        values->rpm = RPM_DEFAULT;                            
+        values->ramp_factor = RAMP_FACTOR_DEFAULT;            
+        break;                                                
+                                                              
+    case 1:                                                   
+        /* Define preset 2 defaults here. */                  
+        values->clean_duration = CLEAN_DUR_DEFAULT2;           
+        values->rinse_duration = RINSE_DUR_DEFAULT2;           
+        values->spin_duration = SPIN_DUR_DEFAULT2;             
+        values->agitate_duration = AGITATE_DUR_DEFAULT2;       
+        values->rpm = RPM_DEFAULT2;                            
+        values->ramp_factor = RAMP_FACTOR_DEFAULT2;            
+        break;                                                
+                                                              
+    case 2:                                                   
+        /* Define preset 3 defaults here. */                  
+        values->clean_duration = CLEAN_DUR_DEFAULT3;           
+        values->rinse_duration = RINSE_DUR_DEFAULT3;           
+        values->spin_duration = SPIN_DUR_DEFAULT3;             
+        values->agitate_duration = AGITATE_DUR_DEFAULT3;       
+        values->rpm = RPM_DEFAULT3;                            
+        values->ramp_factor = RAMP_FACTOR_DEFAULT3;            
+        break;                                                
+                                                              
+    default:                                                  
+        break;                                                
+    }                                                         
+}                                                             
+                                                              
+static void load_presets(void)                                
+{                                                             
+    FILE *file;                                               
+    wcc_preset_file_t data;                                   
+                                                              
+    if (presets_loaded) {                                     
+        return;                                               
+    }                                                         
+                                                              
+    for (uint8_t i = 0; i < WCC_PRESET_COUNT; i++) {          
+        set_default_preset_values(i, &presets[i]);            
+    }                                                         
+                                                              
+    file = fopen(SETTINGS_DATA_PATH, "rb");                   
+    if (file != NULL) {                                       
+        size_t count = fread(&data, sizeof(data), 1, file);   
+        fclose(file);                                         
+                                                              
+        if (count == 1 &&                                     
+            data.magic == WCC_PRESET_FILE_MAGIC &&            
+            data.version == WCC_PRESET_FILE_VERSION &&        
+            data.count == WCC_PRESET_COUNT) {                 
+            for (uint8_t i = 0; i < WCC_PRESET_COUNT; i++) {  
+                presets[i] = data.values[i];                  
+            }                                                 
+        }                                                     
+    }                                                         
+                                                              
+    presets_loaded = true;                                    
+}                                                             
 
-  if (code == LV_EVENT_CLICKED) {
-    LV_LOG_USER("Return button clicked");
-    lv_screen_load_anim(wcc_get_main_screen(), LV_SCR_LOAD_ANIM_OVER_TOP, 500, 10 ,false);
-  }
+static void save_presets(void)                                
+{                                                             
+    FILE *file;                                               
+    wcc_preset_file_t data;                                   
+                                                              
+    memset(&data, 0, sizeof(data));                           
+    data.magic = WCC_PRESET_FILE_MAGIC;                       
+    data.version = WCC_PRESET_FILE_VERSION;                   
+    data.count = WCC_PRESET_COUNT;                            
+                                                              
+    for (uint8_t i = 0; i < WCC_PRESET_COUNT; i++) {          
+        data.values[i] = presets[i];                          
+    }                                                         
+                                                              
+    file = fopen(SETTINGS_DATA_PATH, "wb");                   
+    if (file != NULL) {                                       
+        fwrite(&data, sizeof(data), 1, file);                 
+        fclose(file);                                         
+    }                                                         
 }
 
-/* 
-    Map the RPM setting to a duty cycle percentage
-*/
-static uint16_t map_rpm_to_duty_cycle(uint16_t rpm)
+static void read_current_values(wcc_preset_values_t *values)
 {
-    return lv_map(rpm, 0, RPM_MAX, MOTOR_MIN_DUTY, MOTOR_MAX_DUTY); 
+    values->clean_duration = lv_subject_get_int(&clean_duration_int_subject);
+    values->rinse_duration = lv_subject_get_int(&rinse_duration_int_subject);
+    values->spin_duration = lv_subject_get_int(&spin_duration_int_subject);
+    values->agitate_duration = lv_subject_get_int(&agitate_duration_int_subject);
+    values->rpm = lv_subject_get_int(&rpm_int_subject);
+    values->ramp_factor = lv_subject_get_int(&ramp_factor_int_subject);
 }
 
-static void up_button_event_cb(lv_event_t * event)
-{
-  data_binding_info * ldbi  = (data_binding_info *)lv_event_get_user_data(event);
-  int32_t val = lv_subject_get_int(ldbi->subject);
+static void update_preset_button_states(void)                 
+{                                                             
+    for (int i = 0; i < WCC_PRESET_COUNT; i++) {              
+        lv_obj_t *buttons[] = {                               
+            settings_preset_buttons[i],                       
+            main_preset_buttons[i]                            
+        };                                                    
+                                                              
+        for (lv_obj_t *button : buttons) {                    
+            if (button == NULL) {                             
+                continue;                                     
+            }                                                 
+                                                              
+            if (i == selected_preset) {                       
+                lv_obj_add_state(button, LV_STATE_CHECKED);   
+            } else {                                          
+                lv_obj_clear_state(button, LV_STATE_CHECKED); 
+            }                                                 
+        }                                                     
+    }                                                         
+}    
 
-//  TBD: add LV_EVENT_LONG_PRESSED_REPEAT support for quick changing
-//  values. There's seems to be a problem with SHORT_CLICKED events
-//  intermixed with LONG_PRESSED_REPEAT events.  
-//  For now, just update by +/- 30 sec increments.
-    val += ldbi->update_increment;
-    val = val >= ldbi->max_value ? ldbi->max_value : val;
-    lv_subject_set_int(ldbi->subject, val);
+static void apply_preset(uint8_t preset_index)
+{
+    if (preset_index >= WCC_PRESET_COUNT) {
+        return;
+    }
+
+    selected_preset = preset_index;
+
+    lv_subject_set_int(&clean_duration_int_subject,
+                       presets[preset_index].clean_duration);
+    lv_subject_set_int(&rinse_duration_int_subject,
+                       presets[preset_index].rinse_duration);
+    lv_subject_set_int(&spin_duration_int_subject,
+                       presets[preset_index].spin_duration);
+    lv_subject_set_int(&agitate_duration_int_subject,
+                       presets[preset_index].agitate_duration);
+    lv_subject_set_int(&rpm_int_subject, presets[preset_index].rpm);
+    lv_subject_set_int(&ramp_factor_int_subject,
+                       presets[preset_index].ramp_factor);
+
+    update_preset_button_states();
 }
 
-static void down_button_event_cb(lv_event_t * event)
+void wcc_select_preset(uint8_t preset_index)
 {
-  data_binding_info * ldbi = (data_binding_info *)lv_event_get_user_data(event);
-  int32_t val = lv_subject_get_int(ldbi->subject);
-
-  val -= ldbi->update_increment;
-  // time setting value bottoms out at zero
-  val = val <= 0 ? 0 : val;
-  lv_subject_set_int(ldbi->subject, val);
+    apply_preset(preset_index);
 }
 
-/*
-    This describes a row in the settings screen that contains
-    item_description up_button down_button time_settings_label
-*/
-static lv_obj_t * create_duration_item(const char * desc)
+void wcc_capture_preset(uint8_t preset_index)
 {
-    // A container for the desc label, buttons, and time label
-    lv_color_t bgc = lv_color_make(WCC_BACKGROUND_GREY);
-    lv_obj_t * cont = lv_obj_create(settings_screen);
-    lv_obj_set_style_border_width(cont, 0, 0);
-    lv_obj_set_width(cont, lv_obj_get_width(settings_screen));
-    lv_obj_set_height(cont,30);
-    lv_obj_set_style_border_width(cont, 0, 0);
-    lv_obj_set_style_bg_color(cont, bgc, 0);
+    if (preset_index >= WCC_PRESET_COUNT) {
+        return;
+    }
 
-    // Descriptor label
-    lv_obj_t * desc_label = lv_label_create(cont);
-    lv_label_set_text(desc_label, desc);
-    lv_obj_set_style_text_font(desc_label, &lv_font_montserrat_14, 0);
-    // Define the width of the description
-    lv_obj_set_width(desc_label, 150);
-    // Left side of container
-    lv_obj_align(desc_label, LV_ALIGN_TOP_LEFT, 0, -4);
-
-    // Buttons
-    extern lv_style_t duration_button_style;
-
-    lv_obj_t * up_button = lv_btn_create(cont);
-    lv_obj_set_width(up_button, 30);
-    lv_obj_set_height(up_button, 30);
-    lv_obj_add_style(up_button, &duration_button_style, 0);
-    lv_obj_t * up_button_label = lv_label_create(up_button);
-    lv_obj_center(up_button_label);
-    lv_label_set_text(up_button_label, LV_SYMBOL_UP);
-    lv_obj_set_style_text_font(up_button_label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(up_button_label, lv_color_black(), 0);
-    lv_obj_align_to(up_button, desc_label, LV_ALIGN_OUT_RIGHT_TOP, 0, -7);
-
-    lv_obj_t * down_button = lv_btn_create(cont);
-    lv_obj_set_width(down_button, 30);
-    lv_obj_set_height(down_button, 30);
-    lv_obj_add_style(down_button, &duration_button_style, 0);
-    lv_obj_t * down_button_label = lv_label_create(down_button);
-    lv_obj_center(down_button_label);
-    lv_label_set_text(down_button_label, LV_SYMBOL_DOWN);
-    lv_obj_set_style_text_font(down_button_label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(down_button_label, lv_color_black(), 0);
-    lv_obj_align_to(down_button, up_button, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
-
-    // Time display field with white, bordered background
-    lv_obj_t * time_label_cont = lv_obj_create(cont);
-    lv_obj_set_style_bg_color(time_label_cont, lv_color_white(), 0);
-    lv_obj_set_style_border_width(time_label_cont, 1, 0);
-    lv_obj_set_style_border_color(time_label_cont, lv_color_black(), 0);
-    lv_obj_set_style_radius(time_label_cont, 1, 0);
-    lv_obj_set_width(time_label_cont, 75);
-    lv_obj_set_height(time_label_cont, 28);
-    // Right side of parent container
-    lv_obj_align(time_label_cont, LV_ALIGN_RIGHT_MID, -1, -1);
-
-    lv_obj_t * time_label = lv_label_create(time_label_cont);
-    lv_obj_set_style_bg_color(time_label_cont, lv_color_white(), 0);
-    lv_label_set_text(time_label, "00:00");
-    lv_obj_center(time_label);
-    lv_obj_set_style_text_font(time_label, &lv_font_montserrat_16, 0);
-
-    return cont;
+    read_current_values(&presets[preset_index]);
+    selected_preset = preset_index;
+    save_presets();
+    update_preset_button_states();
 }
 
-static lv_obj_t * create_return_to_main_button()
+static void preset_button_event_cb(lv_event_t *event)
 {
-    lv_obj_t * button = lv_btn_create(settings_screen);
-    //lv_obj_remove_style_all(button);
-    lv_obj_t * button_label = lv_label_create(button);
-    //lv_obj_add_style(button, &transparent_button_style, LV_PART_MAIN);
-    lv_obj_set_style_text_font(button_label, &lv_font_montserrat_16, 0);
-    lv_label_set_text(button_label, "Done " LV_SYMBOL_NEW_LINE);
-    lv_obj_center(button_label);
+    uint8_t preset_index =
+        (uint8_t)(uintptr_t)lv_event_get_user_data(event);
+    lv_event_code_t code = lv_event_get_code(event);
+
+    if (code == LV_EVENT_LONG_PRESSED) {
+        wcc_capture_preset(preset_index);
+    } else if (code == LV_EVENT_CLICKED) {
+        wcc_select_preset(preset_index);
+    }
+}
+
+static lv_obj_t *create_preset_button(lv_obj_t *parent,
+                                      uint8_t preset_index,
+                                      int width,
+                                      int height)
+{
+    lv_obj_t *button = lv_btn_create(parent);
+    lv_obj_t *label = lv_label_create(button);
+    char text[2];
+
+    text[0] = (char)('1' + preset_index);
+    text[1] = '\0';
+
     lv_obj_remove_flag(button, LV_OBJ_FLAG_PRESS_LOCK);
-    lv_obj_add_event_cb(button, return_to_main_button_event_cb, LV_EVENT_ALL, NULL);
-    lv_obj_set_width(button, 70); 
-    lv_obj_set_height(button, 30);
+    lv_obj_set_size(button, width, height);
+    lv_obj_add_style(button, &on_button_style, LV_STATE_DEFAULT);
+    lv_obj_add_style(button, &off_button_style, LV_STATE_CHECKED);
+    lv_label_set_text(label, text);
+    lv_obj_center(label);
+    lv_obj_add_event_cb(button, preset_button_event_cb, LV_EVENT_ALL,
+                        (void *)(uintptr_t)preset_index);
+
     return button;
 }
 
-static void format_time(const int32_t in, time_format * out)
+void wcc_create_main_preset_buttons(lv_obj_t *parent, lv_obj_t * mode_selector)
 {
-    out->min = in/60;
-    out->sec = in%60;
+    for (int i = 0; i < WCC_PRESET_COUNT; i++) {
+        main_preset_buttons[i] =
+            create_preset_button(parent, (uint8_t)i, 32, 30);
+        lv_obj_align_to(main_preset_buttons[i], mode_selector,LV_ALIGN_OUT_RIGHT_TOP, 8, i*36) ;
+    }
 
-    // out->sec will be zero if in < 60
-    if (out->min == 0 && out->sec ==0 ) {
-        out->sec = in;
+    update_preset_button_states();
+}
+
+static void return_to_main_button_event_cb(lv_event_t *event)
+{
+    if (lv_event_get_code(event) == LV_EVENT_CLICKED) {
+        lv_screen_load_anim(wcc_get_main_screen(),
+                            LV_SCR_LOAD_ANIM_OVER_TOP, 500, 10, false);
     }
 }
 
-uint16_t get_duration(int32_t operating_mode)
+static uint16_t map_rpm_to_duty_cycle(uint16_t rpm)
 {
-    if (operating_mode == OperatingMode::clean)
-        return lv_subject_get_int(&clean_duration_int_subject);
-    if (operating_mode == OperatingMode::rinse)
-        return lv_subject_get_int(&rinse_duration_int_subject);
-    if (operating_mode == OperatingMode::spin)
-        return lv_subject_get_int(&spin_duration_int_subject);
-    return 0;
+    return lv_map(rpm, 0, RPM_MAX, MOTOR_MIN_DUTY, MOTOR_MAX_DUTY);
 }
 
-uint16_t get_agitate_interval_duration()
+static void up_button_event_cb(lv_event_t *event)
 {
-    return lv_subject_get_int(&agitate_duration_int_subject);
+    data_binding_info *binding =
+        (data_binding_info *)lv_event_get_user_data(event);
+    int32_t value = lv_subject_get_int(binding->subject);
+
+    value += binding->update_increment;
+    if (value > binding->max_value) {
+        value = binding->max_value;
+    }
+
+    lv_subject_set_int(binding->subject, value);
 }
 
-uint16_t get_ramp_factor()
+static void down_button_event_cb(lv_event_t *event)
 {
-    return lv_subject_get_int(&ramp_factor_int_subject);
+    data_binding_info *binding =
+        (data_binding_info *)lv_event_get_user_data(event);
+    int32_t value = lv_subject_get_int(binding->subject);
+
+    value -= binding->update_increment;
+    if (value < 0) {
+        value = 0;
+    }
+
+    lv_subject_set_int(binding->subject, value);
 }
 
-uint16_t get_duty_cycle()
+static lv_obj_t *create_duration_item(const char *description)
 {
-    return  map_rpm_to_duty_cycle(lv_subject_get_int(&rpm_int_subject));
+    lv_color_t background = lv_color_make(WCC_BACKGROUND_GREY);
+    lv_obj_t *container = lv_obj_create(settings_screen);
+    lv_obj_t *description_label;
+    lv_obj_t *up_button;
+    lv_obj_t *down_button;
+    lv_obj_t *value_container;
+    lv_obj_t *value_label;
+
+    lv_obj_set_width(container, lv_obj_get_width(settings_screen));
+    lv_obj_set_height(container, 30);
+    lv_obj_set_style_border_width(container, 0, LV_PART_MAIN);
+    lv_obj_set_style_outline_width(container, 0, LV_PART_MAIN);   
+    lv_obj_set_style_shadow_width(container, 0, LV_PART_MAIN);  
+    lv_obj_set_style_bg_color(container, background, LV_PART_MAIN);
+    /* Prevent the duration row from scrolling. */                
+    lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);         
+    lv_obj_set_scrollbar_mode(container, LV_SCROLLBAR_MODE_OFF); 
+
+    description_label = lv_label_create(container);
+    lv_label_set_text(description_label, description);
+    lv_obj_set_width(description_label, 150);
+    lv_obj_align(description_label, LV_ALIGN_TOP_LEFT, 0, -4);
+
+    up_button = lv_btn_create(container);
+    lv_obj_set_size(up_button, 30, 30);
+    lv_obj_add_style(up_button, &duration_button_style, 0);
+    //lv_obj_align(up_button, LV_ALIGN_TOP_LEFT, 150, -7);
+    lv_obj_align_to(up_button, description_label, LV_ALIGN_OUT_RIGHT_TOP, 3, -9);
+    lv_obj_t *up_label = lv_label_create(up_button);
+    lv_label_set_text(up_label, LV_SYMBOL_UP);
+    lv_obj_center(up_label);
+
+    down_button = lv_btn_create(container);
+    lv_obj_set_size(down_button, 30, 30);
+    lv_obj_add_style(down_button, &duration_button_style, 0);
+    lv_obj_align_to(down_button, up_button, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
+    lv_obj_t *down_label = lv_label_create(down_button);
+    lv_label_set_text(down_label, LV_SYMBOL_DOWN);
+    lv_obj_center(down_label);
+
+    value_container = lv_obj_create(container);
+    lv_obj_set_size(value_container, 75 , 28);
+    lv_obj_align_to(value_container, down_button, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+    lv_obj_clear_flag(value_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(value_container, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_style_bg_color(value_container, lv_color_white(), 0);
+    lv_obj_set_style_border_width(value_container, 1, 0);
+    lv_obj_set_style_border_color(value_container, lv_color_black(), 0);
+
+    value_label = lv_label_create(value_container);
+    lv_label_set_text(value_label, "00:00");
+    lv_obj_center(value_label);
+
+    return container;
 }
 
-static void update_time_label_from_subject(lv_observer_t * observer, lv_subject_t * subj)
+static lv_obj_t *create_return_to_main_button(void)
 {
-    lv_obj_t * label =(lv_obj_t *)lv_observer_get_user_data(observer);
-    LV_ASSERT_NULL(label);
-    int16_t value = lv_subject_get_int(subj);
-    time_format tm;
-    format_time(value, &tm);
-    lv_label_set_text_fmt(label,TIME_FORMAT, tm.min, tm.sec);
+    lv_obj_t *button = lv_btn_create(settings_screen);
+    lv_obj_t *label = lv_label_create(button);
+
+    lv_obj_set_size(button, 70, 30);
+    lv_label_set_text(label, "Done");
+    lv_obj_center(label);
+    lv_obj_remove_flag(button, LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_add_event_cb(button, return_to_main_button_event_cb,
+                        LV_EVENT_ALL, NULL);
+
+    return button;
 }
 
-static void update_scalar_label_from_subject(lv_observer_t * observer, lv_subject_t * subj)
+static void format_time(int32_t value, time_format *formatted)
 {
-    lv_obj_t * label =(lv_obj_t *)lv_observer_get_user_data(observer);
-    LV_ASSERT_NULL(label);
-    int16_t value = lv_subject_get_int(subj);
-    lv_label_set_text_fmt(label,SCALAR_FORMAT, (int32_t)value);
-}
+    formatted->min = value / 60;
+    formatted->sec = value % 60;
 
-static void  update_duration_cb(lv_observer_t * observer, lv_subject_t * subj)
-{
-    /* Update the setting display label */
-    update_time_label_from_subject(observer, subj);
-}
-
-static void  update_agitate_interval_cb(lv_observer_t * observer, lv_subject_t * subj)
-{
-    update_time_label_from_subject(observer, subj);
-}
-
-static void  update_ramp_factor_cb(lv_observer_t * observer, lv_subject_t * subj)
-{
-    update_scalar_label_from_subject(observer, subj);
-    uint16_t value = (uint16_t)lv_subject_get_int(subj);
-    if (value < 1) {
-        lv_subject_set_int(subj, 1); // Ensure ramp factor is at least 1
+    if (formatted->min == 0 && formatted->sec == 0) {
+        formatted->sec = value;
     }
 }
 
-/* When RPM value changes, the settings label is updated. */ 
-static void  update_rpm_value_cb(lv_observer_t * observer, lv_subject_t * subj)
+static void update_time_label_from_subject(lv_observer_t *observer,
+                                           lv_subject_t *subject)
 {
-    update_scalar_label_from_subject(observer, subj);
+    lv_obj_t *label = (lv_obj_t *)lv_observer_get_user_data(observer);
+    time_format formatted;
+    int32_t value = lv_subject_get_int(subject);
+
+    format_time(value, &formatted);
+    lv_label_set_text_fmt(label, TIME_FORMAT,
+                          (long)formatted.min, (long)formatted.sec);
 }
 
-
-static void get_duration_item_buttons_and_label(const lv_obj_t * dur_cont, lv_obj_t ** ubutton, lv_obj_t ** dbutton, lv_obj_t ** label)
+static void update_scalar_label_from_subject(lv_observer_t *observer,
+                                             lv_subject_t *subject)
 {
-    lv_obj_t * cont;
+    lv_obj_t *label = (lv_obj_t *)lv_observer_get_user_data(observer);
+    int32_t value = lv_subject_get_int(subject);
 
-    // The time label is in a container
-    cont = lv_obj_get_child(dur_cont, 3);
-    LV_ASSERT(lv_obj_check_type(cont, &lv_obj_class));
-    *label = lv_obj_get_child(cont, 0);
-    LV_ASSERT(lv_obj_check_type(*label, &lv_label_class));
-    *ubutton = lv_obj_get_child(dur_cont, 1);
-    LV_ASSERT(lv_obj_check_type(*ubutton, &lv_button_class));
-    *dbutton = lv_obj_get_child(dur_cont, 2);
-    LV_ASSERT(lv_obj_check_type(*dbutton, &lv_button_class));
+    lv_label_set_text_fmt(label, SCALAR_FORMAT, (long)value);
 }
 
-static void create_data_binding(lv_obj_t * cont, data_binding_info *ldbi)
+static void update_duration_cb(lv_observer_t *observer, lv_subject_t *subject)
 {
-    lv_obj_t *ubutton, *dbutton, *label;
-    // Define button actions and data/label bindings
-    get_duration_item_buttons_and_label(cont, &ubutton, &dbutton, &label);
-    LV_ASSERT(lv_obj_check_type(ubutton, &lv_button_class));
-    LV_ASSERT(lv_obj_check_type(dbutton, &lv_button_class));
-    LV_ASSERT(lv_obj_check_type(label, &lv_label_class));
-    // Init subject
-    lv_subject_init_int(ldbi->subject, ldbi->default_value);
-    lv_obj_add_event_cb(ubutton, up_button_event_cb, LV_EVENT_SHORT_CLICKED, ldbi);
-    lv_obj_add_event_cb(dbutton, down_button_event_cb, LV_EVENT_SHORT_CLICKED, ldbi);
+    update_time_label_from_subject(observer, subject);
+}
 
-    // User data includes the label and data type for the subject. The label is updated when the subject value changes.
-    // The data type is used to determine which setting is being updated (clean, rinse, spin, agitate, rpm, spinup)
+static void update_agitate_interval_cb(lv_observer_t *observer,
+                                       lv_subject_t *subject)
+{
+    update_time_label_from_subject(observer, subject);
+}
 
-    lv_observer_t * observer = lv_subject_add_observer(ldbi->subject, ldbi->label_updater, label);
-    // init label -- may not be necessary.
-    ldbi->label_updater(observer, ldbi->subject);
+static void update_ramp_factor_cb(lv_observer_t *observer,
+                                  lv_subject_t *subject)
+{
+    update_scalar_label_from_subject(observer, subject);
+
+    if (lv_subject_get_int(subject) < 1) {
+        lv_subject_set_int(subject, 1);
+    }
+}
+
+static void update_rpm_value_cb(lv_observer_t *observer,
+                                lv_subject_t *subject)
+{
+    update_scalar_label_from_subject(observer, subject);
+}
+
+static void get_duration_item_controls(const lv_obj_t *container,
+                                       lv_obj_t **up_button,
+                                       lv_obj_t **down_button,
+                                       lv_obj_t **value_label)
+{
+    lv_obj_t *value_container = lv_obj_get_child(container, 3);
+
+    *up_button = lv_obj_get_child(container, 1);
+    *down_button = lv_obj_get_child(container, 2);
+    *value_label = lv_obj_get_child(value_container, 0);
+}
+
+static void create_data_binding(lv_obj_t *container,
+                                data_binding_info *binding)
+{
+    lv_obj_t *up_button;
+    lv_obj_t *down_button;
+    lv_obj_t *value_label;
+
+    get_duration_item_controls(container, &up_button, &down_button,
+                               &value_label);
+
+    lv_subject_init_int(binding->subject, binding->default_value);
+    lv_obj_add_event_cb(up_button, up_button_event_cb,
+                        LV_EVENT_SHORT_CLICKED, binding);
+    lv_obj_add_event_cb(down_button, down_button_event_cb,
+                        LV_EVENT_SHORT_CLICKED, binding);
+
+    lv_observer_t *observer =
+        lv_subject_add_observer(binding->subject,
+                                binding->label_updater,
+                                value_label);
+    binding->label_updater(observer, binding->subject);
+}
+
+static void create_settings_title_bar(void)
+{
+    lv_obj_t *bar = lv_obj_create(settings_screen);
+    lv_obj_t *title = lv_label_create(bar);
+
+    lv_obj_set_size(bar, lv_obj_get_width(settings_screen), 35);
+    lv_obj_align(bar, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_set_style_border_width(bar, 0, 0);
+    lv_obj_set_style_radius(bar, 1, 0);
+    lv_obj_set_style_bg_color(bar, lv_color_make(WCC_TITLE_BLUE), 0);
+
+    lv_label_set_text(title, "Settings");
+    lv_obj_set_style_text_color(title, lv_color_white(), 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
+    lv_obj_align(title, LV_ALIGN_LEFT_MID, 6, 0);
+
+    for (int i = 0; i < WCC_PRESET_COUNT; i++) {
+        settings_preset_buttons[i] =
+            create_preset_button(bar, (uint8_t)i, 30, 28);
+        lv_obj_align(settings_preset_buttons[i], LV_ALIGN_LEFT_MID,
+                     105 + i * 35, 0);
+    }
+
+    update_preset_button_states();
 }
 
 void wcc_create_settings(void)
 {
+    load_presets();
 
     settings_screen = lv_obj_create(NULL);
-    LV_ASSERT(settings_screen != NULL);
-    LV_ASSERT(lv_obj_check_type(settings_screen, &lv_obj_class));
-
-    // Background
     wcc_set_screen_bg_style(settings_screen);
 
-    // Title Bar
-    (void)wcc_create_title_bar(settings_screen, "Settings");
+    create_settings_title_bar();
 
-    // Create return to main button on settings screen 
     return_to_main_button = create_return_to_main_button();
-    lv_obj_align(return_to_main_button, LV_ALIGN_TOP_RIGHT, 0, 0);
+    lv_obj_align(return_to_main_button, LV_ALIGN_TOP_RIGHT, 0, 2);
 
-    lv_obj_t * clean_duration_item_container = create_duration_item("CLEAN DURATION:");
-    lv_obj_align(clean_duration_item_container, LV_ALIGN_TOP_LEFT, 0, 36);
+    lv_obj_t *clean_item = create_duration_item("CLEAN DURATION:");
+    lv_obj_align(clean_item, LV_ALIGN_TOP_LEFT, 0, 36);
+    create_data_binding(clean_item, &dbi[WCC_CLEAN]);
 
-    // This binds the settings value to the label using subject/observer pattern
-    // The up/down button callback just updates the subject value and the label is updated
-    // via a label callback
-    create_data_binding(clean_duration_item_container, &dbi[WCC_CLEAN]);
+    lv_obj_t *rinse_item = create_duration_item("RINSE DURATION:");
+    lv_obj_align_to(rinse_item, clean_item, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    create_data_binding(rinse_item, &dbi[WCC_RINSE]);
 
-    lv_obj_t * rinse_duration_item_container = create_duration_item("RINSE DURATION:");
-    lv_obj_align_to(rinse_duration_item_container, 
-        clean_duration_item_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
-    create_data_binding(rinse_duration_item_container, &dbi[WCC_RINSE]);
+    lv_obj_t *spin_item = create_duration_item("SPIN DURATION:");
+    lv_obj_align_to(spin_item, rinse_item, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    create_data_binding(spin_item, &dbi[WCC_SPIN]);
 
-    lv_obj_t * spin_duration_item_container = create_duration_item("SPIN DURATION:");
-    lv_obj_align_to(spin_duration_item_container, 
-        rinse_duration_item_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
-    create_data_binding(spin_duration_item_container, &dbi[WCC_SPIN]);
+    lv_obj_t *agitate_item = create_duration_item("AGITATE DURATION:");
+    lv_obj_align_to(agitate_item, spin_item, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    create_data_binding(agitate_item, &dbi[WCC_AGITATE]);
 
-    lv_obj_t * agitate_duration_item_container = create_duration_item("AGITATE DURATION:");
-    lv_obj_align_to(agitate_duration_item_container,
-        spin_duration_item_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 2); 
-    create_data_binding(agitate_duration_item_container, &dbi[WCC_AGITATE]);
+    lv_obj_t *rpm_item = create_duration_item("RPM:");
+    lv_obj_align_to(rpm_item, agitate_item, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    create_data_binding(rpm_item, &dbi[WCC_RPM]);
 
-    lv_obj_t * rpm_item_container = create_duration_item("RPM:");
-    lv_obj_align_to(rpm_item_container,
-        agitate_duration_item_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 2); 
-    create_data_binding(rpm_item_container, &dbi[WCC_RPM]);
+    lv_obj_t *ramp_item = create_duration_item("SPIN UP RATE:");
+    lv_obj_align_to(ramp_item, rpm_item, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    create_data_binding(ramp_item, &dbi[WCC_SPINUP]);
 
-    lv_obj_t * spin_up_rate_item_container = create_duration_item("SPIN UP RATE:");
-    lv_obj_align_to(spin_up_rate_item_container,
-        rpm_item_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 2); 
-    create_data_binding(spin_up_rate_item_container, &dbi[WCC_SPINUP]);
-
-    return;
-
+    update_preset_button_states();
 }
 
-lv_obj_t * wcc_get_settings_screen(void)
+lv_obj_t *wcc_get_settings_screen(void)
 {
     return settings_screen;
+}
+
+uint16_t get_duration(int32_t operating_mode)
+{
+    if (operating_mode == OperatingMode::clean) {
+        return lv_subject_get_int(&clean_duration_int_subject);
+    }
+
+    if (operating_mode == OperatingMode::rinse) {
+        return lv_subject_get_int(&rinse_duration_int_subject);
+    }
+
+    if (operating_mode == OperatingMode::spin) {
+        return lv_subject_get_int(&spin_duration_int_subject);
+    }
+
+    return 0;
+}
+
+uint16_t get_agitate_interval_duration(void)
+{
+    uint16_t duration =
+        (uint16_t)lv_subject_get_int(&agitate_duration_int_subject);
+
+    return duration == 0 ? 1 : duration;
+}
+
+uint16_t get_ramp_factor(void)
+{
+    return (uint16_t)lv_subject_get_int(&ramp_factor_int_subject);
+}
+
+uint16_t get_duty_cycle(void)
+{
+    return map_rpm_to_duty_cycle(
+        (uint16_t)lv_subject_get_int(&rpm_int_subject));
 }

@@ -65,7 +65,7 @@ extern "C" void wcc_init_styles(void)
     lv_style_set_bg_color(&off_button_style, lv_color_make(WCC_BUTTON_YELLOW));
     lv_style_set_border_opa(&off_button_style, LV_OPA_40);
     lv_style_set_border_width(&off_button_style, 4);
-    lv_style_set_border_color(&off_button_style, lv_palette_darken(LV_PALETTE_GREY, 128));
+    lv_style_set_border_color(&off_button_style, lv_palette_darken(LV_PALETTE_GREY, 4));
     lv_style_set_outline_opa(&off_button_style, LV_OPA_COVER);
     lv_style_set_outline_color(&on_button_style, lv_color_black());
     lv_style_set_outline_width(&on_button_style, 2);
@@ -78,7 +78,7 @@ extern "C" void wcc_init_styles(void)
     lv_style_set_bg_color(&stop_button_style, lv_color_make(WCC_BUTTON_RED));
     lv_style_set_border_opa(&stop_button_style, LV_OPA_40);
     lv_style_set_border_width(&stop_button_style, 4);
-    lv_style_set_border_color(&stop_button_style, lv_palette_darken(LV_PALETTE_GREY, 128));
+    lv_style_set_border_color(&stop_button_style, lv_palette_darken(LV_PALETTE_GREY, 4));
     lv_style_set_outline_opa(&stop_button_style, LV_OPA_COVER);
     lv_style_set_outline_color(&stop_button_style, lv_color_black());
     lv_style_set_outline_width(&stop_button_style, 2);
@@ -89,8 +89,8 @@ extern "C" void wcc_init_styles(void)
     lv_style_set_radius(&duration_button_style, 2);
     lv_style_set_bg_opa(&duration_button_style, LV_OPA_100);
     lv_style_set_bg_color(&duration_button_style, lv_color_make(WCC_BACKGROUND_GREY));
-    lv_style_set_border_opa(&duration_button_style, LV_OPA_40);
-    lv_style_set_border_width(&duration_button_style, 1);
+    lv_style_set_border_opa(&duration_button_style, LV_OPA_COVER);
+    lv_style_set_border_width(&duration_button_style, 3);
     lv_style_set_border_color(&duration_button_style, lv_color_black());
 
      /* Radio Buttons */

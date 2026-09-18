@@ -1,0 +1,65 @@
+There are 2 main screens in the watch_cleaner_controller application. 
+The main screen holds the start and stop buttons and the mode radio buttons. 
+A settings icon in the shape of a gear is in the lower right corner. 
+The main screen has a title bar. 
+The main screen has a status message and shows the time remaining 
+during a cycle at lower bottom of the screen.
+
+The settings screen is reached by clicking the gear icon. 
+The settings screen has a title bar showing "Settings" and a "Done" button 
+for returning to the main screen. 
+The settings screen allows the user to change one or all of the following settings
+parameters: "Clean Duration", "Rinse Duration", "Spin Duration", "Agitate Duration", "RPM", and "Spin Up Rate". 
+
+I wish to add a feature to define 3 preset buttons which can capture the values of 
+the settings parameters so the user can select one of the 3 presets. 
+Each preset may represent a set of settings parameter values. 
+In order to present an attractive interface to the user, the presets will 
+be represented by 3 buttons in the title bar of the settings screen. 
+The "Settings" title text shall be moved to the left side of the title bar. 
+The preset buttons shall be placed between the title bar and the "Done" button. 
+The "Done" button shall remain on the right side. Each preset button
+will be identified by a number label in the button. The number shall be 1,2,3 
+representing preset buttons 1, 2, and 3.
+
+The main screen shall also show 3 preset buttons to allow the user to quickly
+select a preset from the main screen. The selected preset button on the main
+screen shall be highlighted to indicate it is currently being used.
+
+In order to define the meaning of a preset button,
+there shall be  a mechanism to associate the current settings parameter values 
+to a button.
+There shall be a mechanism to select the desired preset on the setting screen.
+There shall be a mechanism to select the desired preset on the main screen.
+
+The mechanism to associate the current setting parameter values to a preset button
+is a long press of the preset button. A long press of the preset button will 
+capture the settings parameter values and associate it with the pressed button.
+A short press or click shall select the preset values and update the text fields
+for each settings parameter. 
+
+The long press is a persistent save operation. The model should determine a format
+to save and read the button preset setting parameter values to and from a file. 
+A long press initiates a write to the settings parameter file.
+The existing code has a mechanism to open, read, and write files to a flash 
+file system using LittleFS file system. Use this filesystem.
+Upon restart of the system, the preset buttons shall be assoicated with their
+persistent values in the file system file. In other words, the preset buttons
+shall be defined upon restart. When a short click occurs, the preset button 
+is already defined and there is no need to re-read the file over and over.
+
+So, in summary, I wish to create a set of 3 preset buttons which can maintain
+a set of setting parameter values across reboots of the device. The main screen
+shall provide a quick access to the presets via buttons on the main screen. The
+settings screen shall show the preset buttons in the title bar and provide a
+long press mechanism to define what the preset button means in terms of 
+the settings parameters values. A short press or click of the preset button
+on the main screen and settings screen means select those preset values and 
+populate the settings screen with the preset values. 
+
+The current code is designed to instantly update the parameter when the value
+changes. That is, changes are passed to the motor controller at the one second
+tick pace defined by the one_sec_timer. This is by design. When a new preset
+is selected while the motor is running, on the next tick, the new values will
+take effect.
+

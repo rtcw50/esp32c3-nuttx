@@ -15,7 +15,6 @@
 #define SCREEN_HEIGHT 240
 
 /* Global Variables */
-extern bool g_force_calibration;
 
 /* External Prototypes */
 bool esp32c3_xiao_tsc_get_xy(int *x, int *y);
@@ -46,7 +45,7 @@ static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data)
     }
 }
 
-static void queues_init()
+static void queues_init(void)
 {
 const struct mq_attr cleaner_cmd_attr = {
     .mq_maxmsg = 10,
@@ -117,8 +116,7 @@ int wcc_gui_task(int argc, char *argv[])
     wcc_create_calibration_screen();
 
     /* Check for calibration requirements */
-    wcc_calibration_setup(g_force_calibration);
-    g_force_calibration = false;
+    wcc_calibration_setup();
 
 
     /* Main Execution Loop */

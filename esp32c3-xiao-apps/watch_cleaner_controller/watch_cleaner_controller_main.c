@@ -18,7 +18,6 @@
 /* Define system wide globals here */
 bool g_filesystem_ok;
 bool g_calibration_ok;
-bool g_force_calibration = false;
 
 
 void init_application_storage(void)
@@ -38,6 +37,14 @@ void init_application_storage(void)
     if (ret == 0)
     {
         g_filesystem_ok = true;
+    }
+}
+
+static void delete_calibration_file(void)
+{
+    FILE *file = fopen(CAL_DATA_PATH, "rb");
+    if (file) {
+        remove(CAL_DATA_PATH);
     }
 }
 
@@ -62,14 +69,13 @@ static void check_recalibration_pin(void)
     }
     /* Check for low value */
     if (pinval == false) {
-        g_force_calibration = true;
+        /* Delete current calibration file if it exists, this will force a recalibration*/
+        delete_calibration_file();
     }
     close(recal_pin);
     return;
 
-
 no_recal:
-    g_force_calibration = false;
     return;
 }
 

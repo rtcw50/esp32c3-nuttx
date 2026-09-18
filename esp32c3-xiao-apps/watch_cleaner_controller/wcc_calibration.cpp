@@ -275,10 +275,10 @@ static bool load_calibration_data(void)
     return true;
 }
 
-extern "C" void wcc_calibration_setup(bool force_calibration)
+extern "C" void wcc_calibration_setup()
 {
-    /* Do the calibration if no calibration data or forced calibration */
-    if (force_calibration || (load_calibration_data() == false)) {
+    /* Do the calibration if no calibration data  */
+    if (load_calibration_data() == false) {
         /* Become the active screen */
         lv_screen_load_anim(calibration_screen, LV_SCR_LOAD_ANIM_OVER_TOP, 500 , 10,false);
 
