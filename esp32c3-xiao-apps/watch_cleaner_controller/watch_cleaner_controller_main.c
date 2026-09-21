@@ -88,7 +88,7 @@ int watch_cleaner_controller_main(int argc, char *argv[])
         //printf("watch_cleaner: board_app_initialize failed\n");
         return -1;
     }   
-    //printf("watch_cleaner: board initialized\n");
+    printf("watch_cleaner: board initialized\n");
 #endif
 
 init_application_storage();

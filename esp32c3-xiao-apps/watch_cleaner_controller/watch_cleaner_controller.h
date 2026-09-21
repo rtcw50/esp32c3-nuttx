@@ -7,6 +7,17 @@
 #include <time.h>
 #include <inttypes.h>
 
+#if CONFIG_LCD_ILI9341_IFACE0_LANDSCAPE
+#define SCREEN_HEIGHT 240
+#define SCREEN_WIDTH 320
+#else
+#define SCREEN_HEIGHT 320
+#define SCREEN_WIDTH 240
+#endif
+
+/* Tweaks for touch coordinates for the production board*/
+#define WCC_PROD_BOARD_TOUCH_TWEAKS
+
 /* Persistent storage defines */
 #define LFS_MOUNT_POINT "/mnt/lfs"
 #define LFS_DEV_PATH "/dev/mtdblock0"

@@ -35,11 +35,10 @@ static void local_lvgl_indev_cb(lv_indev_t *indev, lv_indev_data_t *data)
     int32_t y = 0;
 
     if (esp32c3_xiao_get_touch(&x, &y)) {
-//    if (esp32c3_xiao_tsc_get_xy(&x, &y)) {
         data->point.x = x;
-        data->point.y = SCREEN_HEIGHT-y;
+        data->point.y = y;
         data->state = LV_INDEV_STATE_PRESSED;
-//        printf("X: %d Y: %d\n", x, y);
+        //printf("X: %ld Y: %ld\n", data->point.x, data->point.y);
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
     }

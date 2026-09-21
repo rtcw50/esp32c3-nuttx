@@ -219,6 +219,7 @@ static void calibration_timer_cb(lv_timer_t * timer)
                               LV_PART_MAIN);
             break;
         case CALIBRATION_COMPLETE:
+            printf ("Calibration complete\n");
             uint16_t cal_data[4];
             invert_x = ((br[0] - tl[0]) < 0);
             invert_y = ((bl[1] - tr[1]) < 0);
@@ -238,6 +239,7 @@ static void calibration_timer_cb(lv_timer_t * timer)
             break;
         case CALIBRATION_FAILED:
             /* fallthough */
+            printf("Calibration Failed\n");
         default:
             lv_timer_delete(timer);
             g_calibration_timer = NULL;

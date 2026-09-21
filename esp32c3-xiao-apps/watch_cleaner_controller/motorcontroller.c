@@ -3,7 +3,6 @@
 #include <nuttx/mqueue.h>
 #include <nuttx/signal.h>
 #include <time.h>
-#include <errno.h>
 #include "watch_cleaner_controller.h"
 
 

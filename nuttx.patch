@@ -958,8 +958,8 @@ index 59516caf5b..bd9b573c46 100644
 +
 +}   
 --- /dev/null	2026-07-28 10:04:45.780954400 -0500
-+++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-09-17 13:58:43.800221290 -0500
-@@ -0,0 +1,595 @@
++++ boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c	2026-09-19 16:06:09.071516208 -0500
+@@ -0,0 +1,624 @@
 +/****************************************************************************
 + * boards/risc-v/esp32c3/esp32c3-xiao/src/esp32c3_tsc.c
 + *
@@ -967,18 +967,16 @@ index 59516caf5b..bd9b573c46 100644
 + ****************************************************************************/
 +
 +#include <nuttx/config.h>
++#include <nuttx/arch.h>
++#include <stdio.h>
 +#include <stdint.h>
 +#include <stdbool.h>
 +#include <syslog.h>
-+#include <errno.h>
-+
 +#include <nuttx/spi/spi.h>
-+
-+#include "espressif/esp_spi.h"
 +#include "espressif/esp_gpio.h"
-+
-+#include "esp32c3-xiao.h"
 +#include <arch/board/board.h>
++
++#define WCC_PROD_BOARD_TOUCH_TWEAKS
 +
 +/* Hardware wiring (from your message):
 + *  T_CS  -> GPIO20
@@ -1002,10 +1000,16 @@ index 59516caf5b..bd9b573c46 100644
 +#define GET_X_CMD 0xD0 // was 0xD3
 +#define GET_Y_CMD 0x90 // was 0x93
 +
-+#define SCREEN_WIDTH  320  // Change to your XIAO screen width
-+#define SCREEN_HEIGHT 240  // Change to your XIAO screen height
++#if CONFIG_LCD_ILI9341_IFACE0_LANDSCAPE
++#define SCREEN_HEIGHT 240
++#define SCREEN_WIDTH 320
++#else
++#define SCREEN_HEIGHT 320
++#define SCREEN_WIDTH 240
++#endif
++
 +// Measure this for your specific touchscreen if needed. These are my values for a 320x240 screen.
-+#define ADC_X_MIN   200
++#define ADC_X_MIN   100
 +#define ADC_X_MAX   2000 
 +#define ADC_Y_MIN   160 
 +#define ADC_Y_MAX   2000 
@@ -1044,7 +1048,6 @@ index 59516caf5b..bd9b573c46 100644
 +/* Public setup function called from board bringup */
 +int esp32c3_tsc_setup(struct spi_dev_s *spi, int minor)
 +{
-+  int ret;
 +
 +  /* Optionally configure the T_CS GPIO here if you're using software CS.
 +   * If hardware CS mapping is used (CONFIG_ESPRESSIF_SPI2_CSPIN == TSC_CS_GPIO)
@@ -1135,7 +1138,8 @@ index 59516caf5b..bd9b573c46 100644
 +}
 +
 +#ifndef Z_THRESHOLD
-+#define Z_THRESHOLD 350
++// 350 ok for test board, 150 needed for production board
++#define Z_THRESHOLD 150
 +#endif
 +
 +#define TOUCH_RAW_SAMPLE_COUNT 8
@@ -1195,6 +1199,7 @@ index 59516caf5b..bd9b573c46 100644
 +    if (!result || *raw_x == 0 || *raw_y == 0) {
 +        return false;
 +    }
++    //printf ("Raw X: %d Raw Y: %d\n", *raw_x, *raw_y);
 +
 +    return true;
 +}
@@ -1419,6 +1424,14 @@ index 59516caf5b..bd9b573c46 100644
 +      return false;
 +    }
 +
++/* The production board  has a weird orientation from the test board,
++    I saw this issue in the Arduino code also. This is needed to get the 0,0
++    coordinate to the top left. */
++#ifdef WCC_PROD_BOARD_TOUCH_TWEAKS
++    int32_t temp_coord = (*y);
++    *y = (*x);
++    *x = temp_coord;
++#endif
 +    return true;
 +}
 +
@@ -1433,7 +1446,7 @@ index 59516caf5b..bd9b573c46 100644
 +        return false;
 +    }
 +    uint32_t touchtimes = 5;
-+    bool valid = false;
++    int valid = 0;
 +
 +
 +    while (touchtimes--)
@@ -1446,10 +1459,21 @@ index 59516caf5b..bd9b573c46 100644
 +      return false;
 +    }
 +
++/* The production board has a weird orientation from the test board,
++    I saw this issue in the Arduino code also. This is needed to get the 0,0
++    coordinate to the top left. */
++#ifdef WCC_PROD_BOARD_TOUCH_TWEAKS
++    uint16_t swapped_raw_x = raw_y;
++    uint16_t swapped_raw_y = raw_x;
++    convert_raw_xy(swapped_raw_x,swapped_raw_y, x, y);
++#else
 +    convert_raw_xy(raw_x, raw_y, x, y);
++#endif
++    *x = (SCREEN_WIDTH - 1) - *x;
++    *y = (SCREEN_HEIGHT - 1) - *y;
++
 +    return true;
 +}
-+
 +
 +bool esp32c3_xiao_calibrate_touch_point(uint16_t * point)
 +{
@@ -1493,6 +1517,11 @@ index 59516caf5b..bd9b573c46 100644
 +    right_x = ((uint32_t)tr[0] + br[0]) / 2U;
 +    top_y = ((uint32_t)tl[1] + tr[1]) / 2U;
 +    bottom_y = ((uint32_t)bl[1] + br[1]) / 2U;
++
++    //printf("tl.x: %d tl.y: %d\n",tl[0], tl[1]);
++    //printf("tr.x: %d tr.y: %d\n",tr[0], tr[1]);
++    //printf("bl.x: %d bl.y: %d\n",bl[0], bl[1]);
++    //printf("br.x: %d br.y: %d\n",br[0], br[1]);
 +
 +    if (invert_x) {
 +      right_x = ((uint32_t)tl[0] + bl[0]) / 2U;
