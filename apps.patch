@@ -157,3 +157,26 @@ index 7a1a83c16..99dc9e5bd 100644
           "with frequency: %" PRIu32 " duty: %08" PRIx32
           " count: %" PRIx32 "\n",
           info.frequency, (uint32_t)info.duty, info.count);
+diff -r '--exclude=*.o' --text apps/graphics/lvgl/lvgl/src/core/lv_refr.c /tmp/lvgl/lvgl-9.2.1/src/core/lv_refr.c
+27d26
+< #define LV_COLOR_16_SWAP 1
+diff -r '--exclude=*.o' --text apps/graphics/lvgl/lvgl/src/drivers/nuttx/lv_nuttx_fbdev.c /tmp/lvgl/lvgl-9.2.1/src/drivers/nuttx/lv_nuttx_fbdev.c
+81,82c81
+< //    lv_display_t * disp = lv_display_create(800, 480);
+<     lv_display_t * disp = lv_display_create(320, 240);
+---
+>     lv_display_t * disp = lv_display_create(800, 480);
+144,145d142
+< 
+< 
+159,160c156
+<         // Note: Using MODE_PARTIAL to save RAM memory and out-of-memory errors
+<         dsc->mem_off_screen = malloc(data_size/10); /* divide by 10 */
+---
+>         dsc->mem_off_screen = malloc(data_size);
+174,176c170
+< // out of memory fix
+<     lv_display_set_render_mode(disp, LV_DISPLAY_RENDER_MODE_PARTIAL);
+< //    lv_display_set_render_mode(disp, LV_DISPLAY_RENDER_MODE_DIRECT);
+---
+>     lv_display_set_render_mode(disp, LV_DISPLAY_RENDER_MODE_DIRECT);
